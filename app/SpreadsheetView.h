@@ -4,6 +4,14 @@
 #include "SpreadsheetTableModel.h"
 #include "ISpreadsheetCore.h"
 
+// ── SpreadsheetView ───────────────────────────────────────────────────────────
+// Excel-style QTableView with:
+//  - Zoom support (font scaling)
+//  - Column/row resize with double-click auto-fit
+//  - Freeze panes support
+//  - Excel-style header highlighting (selected col/row turns green)
+//  - Multi-cell selection with copy/paste
+//  - Context menu
 class SpreadsheetView : public QTableView {
     Q_OBJECT
 public:
@@ -13,6 +21,7 @@ public:
 
     SpreadsheetTableModel* model() const;
     void switchSheet(SheetId sheet);
+    void setZoomFactor(qreal factor);
 
     // Current cell info
     int currentRow() const;
@@ -48,6 +57,8 @@ signals:
 protected:
     void keyPressEvent(QKeyEvent* e) override;
     void contextMenuEvent(QContextMenuEvent* e) override;
+    void mouseDoubleClickEvent(QMouseEvent* e) override;
+    void wheelEvent(QWheelEvent* e) override;
 
 private slots:
     void onCurrentChanged(const QModelIndex& cur, const QModelIndex& prev);
@@ -55,7 +66,12 @@ private slots:
 private:
     ISpreadsheetCore*      m_core;
     SpreadsheetTableModel* m_model;
+    qreal                  m_zoomFactor { 1.0 };
+    int                    m_baseRowHeight  { 24 };
+    int                    m_baseColWidth   { 80 };
 
     void applyToSelection(std::function<void(int,int)> fn);
     void setupHeaders();
+    void refreshSizes();
+    QString selectionToRef() const;
 };

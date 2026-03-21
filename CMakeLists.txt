@@ -28,6 +28,7 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/include/RibbonUI
 )
 
+add_subdirectory(engine)
 add_subdirectory(dll/FormulaEngine)
 add_subdirectory(dll/SpreadsheetCore)
 add_subdirectory(dll/SpreadsheetEngine)
@@ -40,3 +41,4 @@ install(TARGETS
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION bin
 )
+# SpreadsheetEngineLib is static — no install needed

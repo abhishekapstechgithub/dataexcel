@@ -9,12 +9,12 @@ BEGIN
   BEGIN
     BLOCK "040904B0"
     BEGIN
-      VALUE "CompanyName",      "QtSpreadsheet"
+      VALUE "CompanyName",      "OpenSheet"
       VALUE "FileDescription",  "QtSpreadsheet - High Performance Spreadsheet"
       VALUE "FileVersion",      "1.0.0.0"
-      VALUE "InternalName",     "QtSpreadsheet"
+      VALUE "InternalName",     "OpenSheet"
       VALUE "OriginalFilename", "QtSpreadsheet.exe"
-      VALUE "ProductName",      "QtSpreadsheet"
+      VALUE "ProductName",      "OpenSheet"
       VALUE "ProductVersion",   "1.0.0.0"
     END
   END

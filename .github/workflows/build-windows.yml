@@ -1,4 +1,4 @@
-name: Windows Installer
+name: OpenSheet Windows Installer
 
 on:
   push:
@@ -19,6 +19,7 @@ jobs:
         host: windows
         target: desktop
         arch: win64_msvc2019_64
+        modules: 'qtsvg'
         cache: true
 
     - name: Set up MSVC
@@ -39,9 +40,9 @@ jobs:
       shell: cmd
       run: |
         mkdir deploy
-        copy build\bin\QtSpreadsheet.exe deploy\
+        copy build\bin\OpenSheet.exe deploy\
         for %%f in (build\bin\*.dll) do copy "%%f" deploy\
-        windeployqt --release --no-translations --no-system-d3d-compiler deploy\QtSpreadsheet.exe
+        windeployqt --release --no-translations --no-system-d3d-compiler deploy\OpenSheet.exe
 
     - name: Install NSIS
       run: choco install nsis --no-progress -y
@@ -49,13 +50,13 @@ jobs:
     - name: Build installer
       shell: cmd
       run: |
-        copy installer\QtSpreadsheet.nsi deploy\QtSpreadsheet.nsi
+        copy installer\OpenSheet.nsi deploy\OpenSheet.nsi
         cd deploy
-        makensis QtSpreadsheet.nsi
+        makensis OpenSheet.nsi
 
     - name: Upload installer
       uses: actions/upload-artifact@v4
       with:
-        name: QtSpreadsheet-Windows-Installer
-        path: deploy\QtSpreadsheet-Setup.exe
+        name: OpenSheet-Windows-Installer
+        path: deploy\OpenSheet-Setup.exe
         retention-days: 30

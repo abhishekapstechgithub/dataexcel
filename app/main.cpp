@@ -4,8 +4,8 @@
 
 int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
-    app.setApplicationName("QtSpreadsheet");
-    app.setOrganizationName("QtSpreadsheet");
+    app.setApplicationName("OpenSheet");
+    app.setOrganizationName("OpenSheet");
     app.setApplicationVersion("1.0.0");
 
     // Use Fusion style for consistent cross-platform look

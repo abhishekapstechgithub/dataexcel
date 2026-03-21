@@ -22,5 +22,5 @@ target_link_libraries(QtSpreadsheet PRIVATE
 )
 set_target_properties(QtSpreadsheet PROPERTIES
     WIN32_EXECUTABLE TRUE
-    OUTPUT_NAME "QtSpreadsheet"
+    OUTPUT_NAME "OpenSheet"
 )

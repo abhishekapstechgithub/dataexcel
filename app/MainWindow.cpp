@@ -23,7 +23,7 @@
 #include <QApplication>
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
-    setWindowTitle("QtSpreadsheet");
+    setWindowTitle("OpenSheet");
     resize(1280, 800);
 
     // Load DLLs via factory functions
@@ -356,7 +356,7 @@ bool MainWindow::confirmSave() {
 
 void MainWindow::updateTitle() {
     QString name = m_filePath.isEmpty() ? "Untitled" : QFileInfo(m_filePath).fileName();
-    setWindowTitle((m_modified ? "* " : "") + name + " — QtSpreadsheet");
+    setWindowTitle((m_modified ? "* " : "") + name + " — OpenSheet");
 }
 
 void MainWindow::closeEvent(QCloseEvent* e) {

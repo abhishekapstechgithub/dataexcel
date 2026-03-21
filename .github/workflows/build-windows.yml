@@ -1,0 +1,58 @@
+name: Windows Installer
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Qt 6.5.3
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: '6.5.3'
+        host: windows
+        target: desktop
+        arch: win64_msvc2019_64
+        cache: true
+
+    - name: Set up MSVC
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: x64
+
+    - name: Configure
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ env.Qt6_DIR }}"
+
+    - name: Build
+      run: cmake --build build --config Release --parallel
+
+    - name: Deploy Qt DLLs
+      shell: cmd
+      run: |
+        mkdir deploy
+        copy build\bin\QtSpreadsheet.exe deploy\
+        for %%f in (build\bin\*.dll) do copy "%%f" deploy\
+        windeployqt --release --no-translations --no-system-d3d-compiler deploy\QtSpreadsheet.exe
+
+    - name: Install NSIS
+      run: choco install nsis --no-progress -y
+
+    - name: Build installer
+      shell: cmd
+      run: |
+        copy installer\QtSpreadsheet.nsi deploy\QtSpreadsheet.nsi
+        cd deploy
+        makensis QtSpreadsheet.nsi
+
+    - name: Upload installer
+      uses: actions/upload-artifact@v4
+      with:
+        name: QtSpreadsheet-Windows-Installer
+        path: deploy\QtSpreadsheet-Setup.exe
+        retention-days: 30

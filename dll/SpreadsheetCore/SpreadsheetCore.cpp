@@ -53,8 +53,8 @@ static Cell toCoreCell(const EngineCell& ec) {
 }
 
 // ── Helper: convert CellFormat (core) → CellFormat (engine) ──────────────────
-static CellFormat toEngineFormat(const ::CellFormat& cf) {
-    CellFormat ef;
+static EngineCellFormat toEngineFormat(const ::CellFormat& cf) {
+    EngineCellFormat ef;
     ef.bold       = cf.bold;
     ef.italic     = cf.italic;
     ef.underline  = cf.underline;

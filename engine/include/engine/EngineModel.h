@@ -34,7 +34,7 @@ public:
     static int      columnIndex(const QString& label);
 
     // Formatted display value
-    static QString  formatValue(const QVariant& v, const CellFormat& fmt);
+    static QString  formatValue(const QVariant& v, const EngineCellFormat& fmt);
 
 private slots:
     void onCellChanged(EngineSheetId sheet, int row, int col);

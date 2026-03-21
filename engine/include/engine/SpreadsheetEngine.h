@@ -24,7 +24,7 @@
 // ── Cell data types ───────────────────────────────────────────────────────────
 enum class CellType { Empty, Text, Number, Boolean, Formula, Error };
 
-struct CellFormat {
+struct EngineCellFormat {
     QString fontFamily   { "Calibri" };
     int     fontSize     { 11 };
     bool    bold         { false };
@@ -39,7 +39,7 @@ struct CellFormat {
     int     decimals     { 2 };
     bool    strikethrough{ false };
 
-    bool operator==(const CellFormat& o) const = default;
+    bool operator==(const EngineCellFormat& o) const = default;
 };
 
 struct EngineCell {
@@ -47,7 +47,7 @@ struct EngineCell {
     QVariant  rawValue;           // what the user typed / stored
     QVariant  displayValue;       // computed/formatted for display
     QString   formula;            // non-empty if this is a formula cell
-    CellFormat format;
+    EngineCellFormat format;
     bool      dirty       { false }; // needs recalculation
 
     bool isEmpty() const { return type == CellType::Empty; }
@@ -70,7 +70,7 @@ public:
     void        setCellFormula(EngineSheetId sheet, int row, int col,
                                const QString& formula);
     void        setCellFormat(EngineSheetId sheet, int row, int col,
-                              const CellFormat& fmt);
+                              const EngineCellFormat& fmt);
     void        clearCell(EngineSheetId sheet, int row, int col);
     void        clearRange(EngineSheetId sheet,
                            int r1, int c1, int r2, int c2);

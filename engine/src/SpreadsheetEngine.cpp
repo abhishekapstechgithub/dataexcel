@@ -291,11 +291,11 @@ void SpreadsheetEngine::setCellFormula(EngineSheetId sid, int row, int col,
 
 // ── setCellFormat ──────────────────────────────────────────────────────────────
 void SpreadsheetEngine::setCellFormat(EngineSheetId sid, int row, int col,
-                                       const CellFormat& fmt)
+                                       const EngineCellFormat& fmt)
 {
     if (!d->sheets.contains(sid)) return;
     CellAddress addr{row,col};
-    CellFormat oldFmt = d->sheet(sid).cells[addr].format;
+    EngineCellFormat oldFmt = d->sheet(sid).cells[addr].format;
 
     d->undo.push({
         [this,sid,row,col,fmt,addr]() {

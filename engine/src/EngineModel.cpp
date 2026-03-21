@@ -151,7 +151,7 @@ int EngineModel::columnIndex(const QString& label) {
     return col-1;
 }
 
-QString EngineModel::formatValue(const QVariant& v, const CellFormat& fmt) {
+QString EngineModel::formatValue(const QVariant& v, const EngineCellFormat& fmt) {
     if (!v.isValid() || v.isNull()) return {};
     bool ok;
     double d = v.toDouble(&ok);

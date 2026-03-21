@@ -152,8 +152,8 @@ void MainWindow::setupQuickAccessBar() {
 void MainWindow::setupFormulaBar() {
     auto* fbar = new QWidget;
     fbar->setObjectName("formulaBarWidget");
-    fbar->setFixedHeight(32);
-    fbar->setStyleSheet("QWidget { background: #ffffff; }");
+    fbar->setFixedHeight(34);
+    fbar->setStyleSheet("QWidget { background: #fafafa; border-bottom: 1px solid #e0e0e0; }");
 
     auto* fl = new QHBoxLayout(fbar);
     fl->setContentsMargins(6, 3, 6, 3);

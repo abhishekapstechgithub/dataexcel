@@ -8,6 +8,8 @@
 #include "SpreadsheetEngine.h"
 #include <QAbstractTableModel>
 #include <QLocale>
+#include <QDate>
+#include <QDateTime>
 
 class EngineModel : public QAbstractTableModel {
     Q_OBJECT

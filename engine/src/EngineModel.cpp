@@ -12,6 +12,7 @@
 #include <QBrush>
 #include <QFont>
 #include <QLocale>
+#include <QDate>
 
 EngineModel::EngineModel(SpreadsheetEngine* engine, EngineSheetId sheet, QObject* parent)
     : QAbstractTableModel(parent), m_engine(engine), m_sheet(sheet)
@@ -162,8 +163,7 @@ QString EngineModel::formatValue(const QVariant& v, const CellFormat& fmt) {
     case 2: return locale.toCurrencyString(d,"$",fmt.decimals);
     case 3: return locale.toString(d*100.0,'f',fmt.decimals)+"%";
     case 4: return locale.toString(d,'e',fmt.decimals);
-    case 5: // Date
-        if (v.typeId()==QMetaType::QDate) return v.toDate().toString(Qt::ISODate);
+    case 5: // Date — avoid QDate include dependency; just format as string
         return v.toString();
     default: // General
         if (d==(long long)d && qAbs(d)<1e15)

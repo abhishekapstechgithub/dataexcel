@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <functional>
 #include <QString>
+#include <QtGlobal>   // for quint32, size_t, Q_DECL_PURE_FUNCTION
 
 static constexpr int MAX_ROWS = 1'048'576;
 static constexpr int MAX_COLS = 16'384;
@@ -23,12 +24,6 @@ struct CellAddress {
     bool operator!=(const CellAddress& o) const noexcept { return !(*this == o); }
     bool operator< (const CellAddress& o) const noexcept {
         return row != o.row ? row < o.row : col < o.col;
-    }
-
-    // Pack into uint64 — used only by std::hash below
-    std::uint64_t key() const noexcept {
-        return (static_cast<std::uint64_t>(static_cast<unsigned>(row)) << 20)
-             |  static_cast<std::uint64_t>(static_cast<unsigned>(col));
     }
 
     QString toRef() const {
@@ -50,21 +45,24 @@ struct CellAddress {
     }
 };
 
-// ── Qt hash — split key into two quint32 to avoid int64 overload issues ────────
+// ── Qt hash support ───────────────────────────────────────────────────────────
+// Implemented with plain arithmetic — no ::qHash() call, no Qt overload lookup.
+// This avoids MSVC C2665 which fires when the compiler sees ::qHash(quint32)
+// before <QHashFunctions> is fully resolved in the translation unit.
 inline size_t qHash(const CellAddress& a, size_t seed = 0) noexcept {
-    // XOR fold: combine row and col without touching int64 qHash
-    quint32 packed = (static_cast<quint32>(a.row) << 14)
-                   ^  static_cast<quint32>(a.col);
-    return ::qHash(packed, seed);
+    // Combine row and col with FNV-1a-inspired mixing; no Qt helpers needed.
+    size_t h = seed;
+    h ^= static_cast<size_t>(static_cast<unsigned int>(a.row)) + 0x9e3779b9u + (h << 6) + (h >> 2);
+    h ^= static_cast<size_t>(static_cast<unsigned int>(a.col)) + 0x9e3779b9u + (h << 6) + (h >> 2);
+    return h;
 }
 
 // ── std::hash for std::unordered_map ──────────────────────────────────────────
 namespace std {
 template<> struct hash<CellAddress> {
     size_t operator()(const CellAddress& a) const noexcept {
-        // FNV-inspired mix — avoids any platform-specific qHash
-        size_t h = static_cast<size_t>(a.row) * 1048583ULL
-                 ^ static_cast<size_t>(a.col) * 16777259ULL;
+        size_t h = static_cast<size_t>(static_cast<unsigned int>(a.row)) * 1048583ULL
+                 ^ static_cast<size_t>(static_cast<unsigned int>(a.col)) * 16777259ULL;
         return h ^ (h >> 16);
     }
 };

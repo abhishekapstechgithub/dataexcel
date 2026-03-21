@@ -1,3 +1,9 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+//  MainWindow.cpp — OpenSheet Application Shell
+//  Architecture inspired by WPS Office (et.exe + etcore.dll + ksoui.dll pattern)
+//  Layers:
+//    Shell (MainWindow) → RibbonUI → FormulaBar → GridView → SheetBar → StatusBar
+// ═══════════════════════════════════════════════════════════════════════════════
 #include "MainWindow.h"
 #include "SpreadsheetView.h"
 #include "FindReplaceDialog.h"
@@ -25,209 +31,215 @@
 #include <QToolButton>
 #include <QSlider>
 #include <QFrame>
-#include <QSizePolicy>
-#include <QStackedWidget>
 #include <QPainter>
+#include <QPixmap>
 #include <QStyle>
+#include <QScreen>
 
-// ── Tiny icon factory (reused from RibbonWidget pattern) ─────────────────────
-static QIcon makeStatusIcon(const QColor& c, int w = 14, int h = 14) {
-    QPixmap pm(w, h);
-    pm.fill(Qt::transparent);
-    QPainter p(&pm);
-    p.setRenderHint(QPainter::Antialiasing);
-    p.setBrush(c); p.setPen(Qt::NoPen);
-    p.drawEllipse(1, 1, w-2, h-2);
+// ── Small QPainter icon factory (same as ribbon) ─────────────────────────────
+static QIcon shellIcon(std::function<void(QPainter&,int)> fn, int sz=16) {
+    QPixmap pm(sz,sz); pm.fill(Qt::transparent);
+    QPainter p(&pm); p.setRenderHint(QPainter::Antialiasing); fn(p,sz);
     return QIcon(pm);
 }
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle("OpenSheet");
-    resize(1366, 820);
-    setMinimumSize(800, 600);
 
-    // ── Title bar / menu bar color (green like Excel) ────────────────────────
+    // Size to 80% of screen
+    QRect screen = QApplication::primaryScreen()->availableGeometry();
+    resize(qMin(1366, (int)(screen.width() * 0.85)),
+           qMin(768,  (int)(screen.height() * 0.85)));
+    setMinimumSize(900, 600);
+
+    // Green title bar menu (like WPS)
     menuBar()->setStyleSheet(
-        "QMenuBar { background: #1e7145; color: white; font-size: 12px; padding: 2px 4px; }"
-        "QMenuBar::item { padding: 4px 10px; border-radius: 3px; }"
+        "QMenuBar { background: #1e7145; color: white; font-size: 12px; "
+        "           font-family: 'Segoe UI', Arial; padding: 0 6px; }"
+        "QMenuBar::item { padding: 5px 12px; border-radius: 3px; }"
         "QMenuBar::item:selected { background: #155835; }"
-        "QMenu { background: #ffffff; color: #222; border: 1px solid #ccc; font-size: 12px; }"
-        "QMenu::item { padding: 5px 28px; }"
-        "QMenu::item:selected { background: #e8f4ed; color: #1a6b35; }"
-        "QMenu::separator { height: 1px; background: #e0e0e0; margin: 2px 0; }"
+        "QMenuBar::item:pressed  { background: #0f4228; }"
+        "QMenu { background:#fff; color:#222; border:1px solid #ddd; "
+        "        font-size:12px; font-family:'Segoe UI',Arial; }"
+        "QMenu::item { padding:5px 30px 5px 14px; }"
+        "QMenu::item:selected { background:#e8f5ee; color:#1a6b35; }"
+        "QMenu::separator { height:1px; background:#ececec; margin:3px 0; }"
     );
 
-    // Load DLLs
     m_core   = createSpreadsheetCore();
     m_loader = createFileLoader();
 
-    // ── Central widget assembly ───────────────────────────────────────────────
+    // ── Central widget ─────────────────────────────────────────────────────
     auto* central = new QWidget;
-    central->setObjectName("centralWidget");
+    central->setStyleSheet("background:#ffffff;");
     auto* vl = new QVBoxLayout(central);
-    vl->setContentsMargins(0, 0, 0, 0);
+    vl->setContentsMargins(0,0,0,0);
     vl->setSpacing(0);
 
-    // 1. Quick Access Toolbar (inside menu bar area)
-    setupQuickAccessBar();
+    // 1. Quick Access Toolbar row (inside menu bar)
+    buildMenuBar();
 
     // 2. Ribbon
     m_ribbon = createRibbonWidget(this);
     vl->addWidget(m_ribbon);
 
-    // 3. Thin separator line
-    auto* sep1 = new QFrame;
-    sep1->setFrameShape(QFrame::HLine);
-    sep1->setFixedHeight(1);
-    sep1->setStyleSheet("background:#d0d0d0;");
-    vl->addWidget(sep1);
+    // 3. Formula bar
+    {
+        auto* fb = buildFormulaBar();
+        vl->addWidget(fb);
+    }
 
-    // 4. Formula bar
-    setupFormulaBar();
-    vl->addWidget(findChild<QWidget*>("formulaBarWidget"));
-
-    // 5. Another separator
-    auto* sep2 = new QFrame;
-    sep2->setFrameShape(QFrame::HLine);
-    sep2->setFixedHeight(1);
-    sep2->setStyleSheet("background:#d0d0d0;");
-    vl->addWidget(sep2);
-
-    // 6. Spreadsheet view (takes all remaining space)
+    // 4. Grid
     m_view = new SpreadsheetView(m_core, m_core->sheets().first(), this);
+    m_view->setObjectName("gridView");
     vl->addWidget(m_view, 1);
 
-    // 7. Sheet tab bar + add button (at bottom, above status bar)
-    setupSheetBar();
-    vl->addWidget(findChild<QWidget*>("sheetBarWidget"));
+    // 5. Sheet tab bar
+    {
+        auto* sb = buildSheetBar();
+        vl->addWidget(sb);
+    }
 
     setCentralWidget(central);
-
-    // 8. Setup menus and status bar
-    setupStatusBar();
+    buildStatusBar();
     connectRibbon();
     connectView();
     rebuildSheetTabs();
     updateTitle();
+    m_view->setFocus();
 }
 
-MainWindow::~MainWindow() {
-    delete m_core;
-    delete m_loader;
-}
+MainWindow::~MainWindow() { delete m_core; delete m_loader; }
 
-// ── Quick Access Toolbar ──────────────────────────────────────────────────────
-void MainWindow::setupQuickAccessBar() {
-    // Add toolbar items to the right side of the menu bar
+// ═══════════════════════════════════════════════════════════════════════════════
+//  MENU BAR
+// ═══════════════════════════════════════════════════════════════════════════════
+void MainWindow::buildMenuBar() {
     auto* mb = menuBar();
 
-    // File menu
-    auto* fileMenu = mb->addMenu("File");
-    fileMenu->addAction(QIcon(), "New",      this, &MainWindow::newFile,    QKeySequence::New);
-    fileMenu->addAction(QIcon(), "Open...",  this, &MainWindow::openFile,   QKeySequence::Open);
-    fileMenu->addSeparator();
-    fileMenu->addAction(QIcon(), "Save",     this, &MainWindow::saveFile,   QKeySequence::Save);
-    fileMenu->addAction(QIcon(), "Save As...",this, &MainWindow::saveFileAs, QKeySequence::SaveAs);
-    fileMenu->addSeparator();
-    fileMenu->addAction(QIcon(), "Exit",     qApp, &QApplication::quit,     QKeySequence::Quit);
+    // File
+    auto* fm = mb->addMenu("File");
+    fm->addAction("New",      this, &MainWindow::newFile,    QKeySequence::New);
+    fm->addAction("Open...",  this, &MainWindow::openFile,   QKeySequence::Open);
+    fm->addSeparator();
+    fm->addAction("Save",     this, &MainWindow::saveFile,   QKeySequence::Save);
+    fm->addAction("Save As...",this,&MainWindow::saveFileAs, QKeySequence::SaveAs);
+    fm->addSeparator();
+    fm->addAction("Exit",     qApp, &QApplication::quit,     QKeySequence::Quit);
 
-    // Edit menu
-    auto* editMenu = mb->addMenu("Edit");
-    auto* undoAct = editMenu->addAction("Undo", m_core, &ISpreadsheetCore::undo, QKeySequence::Undo);
-    auto* redoAct = editMenu->addAction("Redo", m_core, &ISpreadsheetCore::redo, QKeySequence::Redo);
-    editMenu->addSeparator();
-    editMenu->addAction("Find && Replace...", this, [this]{
-        auto* dlg = new FindReplaceDialog(m_core, currentSheet(), this);
-        dlg->setAttribute(Qt::WA_DeleteOnClose); dlg->show();
-    }, QKeySequence(Qt::CTRL | Qt::Key_H));
+    // Edit
+    auto* em = mb->addMenu("Edit");
+    em->addAction("Undo", m_core, &ISpreadsheetCore::undo, QKeySequence::Undo);
+    em->addAction("Redo", m_core, &ISpreadsheetCore::redo, QKeySequence::Redo);
+    em->addSeparator();
+    em->addAction("Find && Replace...", this, [this]{
+        auto* d = new FindReplaceDialog(m_core, currentSheet(), this);
+        d->setAttribute(Qt::WA_DeleteOnClose); d->show();
+    }, QKeySequence(Qt::CTRL|Qt::Key_H));
 
-    // Sheet menu
-    auto* sheetMenu = mb->addMenu("Sheet");
-    sheetMenu->addAction("Add Sheet",    this, &MainWindow::addSheet);
-    sheetMenu->addAction("Remove Sheet", this, &MainWindow::removeSheet);
+    // Sheet
+    auto* sm = mb->addMenu("Sheet");
+    sm->addAction("Insert Sheet", this, &MainWindow::addSheet);
+    sm->addAction("Delete Sheet", this, &MainWindow::removeSheet);
+    sm->addAction("Rename Sheet", this, [this]{ renameSheet(m_sheetBar->currentIndex()); });
 }
 
-// ── Formula Bar ───────────────────────────────────────────────────────────────
-void MainWindow::setupFormulaBar() {
-    auto* fbar = new QWidget;
-    fbar->setObjectName("formulaBarWidget");
-    fbar->setFixedHeight(34);
-    fbar->setStyleSheet("QWidget { background: #fafafa; border-bottom: 1px solid #e0e0e0; }");
+// ═══════════════════════════════════════════════════════════════════════════════
+//  FORMULA BAR  (WPS-style: name box | ▼ | fx icon | input)
+// ═══════════════════════════════════════════════════════════════════════════════
+QWidget* MainWindow::buildFormulaBar() {
+    auto* bar = new QWidget;
+    bar->setObjectName("formulaBarWidget");
+    bar->setFixedHeight(30);
+    bar->setStyleSheet(
+        "QWidget#formulaBarWidget { background:#f5f5f5; border-bottom: 1px solid #d8d8d8; }"
+    );
 
-    auto* fl = new QHBoxLayout(fbar);
-    fl->setContentsMargins(6, 3, 6, 3);
-    fl->setSpacing(0);
+    auto* hl = new QHBoxLayout(bar);
+    hl->setContentsMargins(4, 3, 4, 3);
+    hl->setSpacing(0);
 
-    // Name box (cell reference like A1, B3:D7)
-    m_nameBox = new QLineEdit;
-    m_nameBox->setObjectName("nameBox");
-    m_nameBox->setFixedWidth(80);
-    m_nameBox->setFixedHeight(24);
+    // ── Name box ─────────────────────────────────────────────────────────
+    m_nameBox = new QLineEdit("A1");
+    m_nameBox->setFixedWidth(70);
+    m_nameBox->setFixedHeight(22);
     m_nameBox->setAlignment(Qt::AlignCenter);
     m_nameBox->setStyleSheet(
-        "QLineEdit { border: 1px solid #c0c0c0; border-radius: 2px; "
-        "font-size: 12px; font-weight: 500; background: white; padding: 0 4px; }"
-        "QLineEdit:focus { border-color: #1e7145; }"
+        "QLineEdit { border:1px solid #c8c8c8; border-radius:2px; background:white; "
+        "font-size:12px; font-family:'Segoe UI',Arial; padding:0 3px; }"
+        "QLineEdit:focus { border-color:#1e7145; }"
     );
-    m_nameBox->setPlaceholderText("A1");
-    fl->addWidget(m_nameBox);
-    fl->addSpacing(4);
+    hl->addWidget(m_nameBox);
 
-    // Vertical separator
+    // Small dropdown arrow button next to name box (WPS has this)
+    auto* nameDropBtn = new QToolButton;
+    nameDropBtn->setFixedSize(16, 22);
+    nameDropBtn->setStyleSheet(
+        "QToolButton { border:1px solid #c8c8c8; border-left:none; border-radius:0 2px 2px 0; "
+        "background:#f0f0f0; }"
+        "QToolButton:hover { background:#e0e0e0; }"
+    );
+    nameDropBtn->setArrowType(Qt::DownArrow);
+    hl->addWidget(nameDropBtn);
+    hl->addSpacing(4);
+
+    // ── Thin separator ────────────────────────────────────────────────────
     auto* vsep = new QFrame;
     vsep->setFrameShape(QFrame::VLine);
-    vsep->setFixedHeight(20);
-    vsep->setStyleSheet("color: #c0c0c0;");
-    fl->addWidget(vsep);
-    fl->addSpacing(4);
+    vsep->setFixedHeight(18);
+    vsep->setStyleSheet("color:#c8c8c8;");
+    hl->addWidget(vsep);
+    hl->addSpacing(4);
 
-    // fx label (clickable icon)
-    m_fxLabel = new QLabel("fx");
-    m_fxLabel->setFixedWidth(28);
-    m_fxLabel->setFixedHeight(24);
+    // ── fx button ─────────────────────────────────────────────────────────
+    m_fxLabel = new QLabel;
+    m_fxLabel->setFixedSize(32, 22);
     m_fxLabel->setAlignment(Qt::AlignCenter);
+    // Draw "fx" as a proper formula icon
+    {
+        QPixmap pm(32, 22); pm.fill(Qt::transparent);
+        QPainter p(&pm); p.setRenderHint(QPainter::Antialiasing);
+        QFont f("Times New Roman", 11, QFont::Bold, true);
+        p.setFont(f); p.setPen(QColor("#1e7145"));
+        p.drawText(QRect(0,0,32,22), Qt::AlignCenter, "fx");
+        m_fxLabel->setPixmap(pm);
+    }
     m_fxLabel->setStyleSheet(
-        "QLabel { font-size: 12px; font-style: italic; color: #1a6b35; "
-        "font-weight: bold; border: 1px solid #d0d0d0; border-radius: 2px; "
-        "background: #f8f8f8; }"
+        "QLabel { border:1px solid #c8c8c8; border-radius:2px; background:white; }"
+        "QLabel:hover { background:#e8f5ee; border-color:#1e7145; }"
     );
     m_fxLabel->setCursor(Qt::PointingHandCursor);
-    fl->addWidget(m_fxLabel);
-    fl->addSpacing(4);
+    m_fxLabel->setToolTip("Insert Function");
+    hl->addWidget(m_fxLabel);
+    hl->addSpacing(4);
 
-    // Another separator
+    // ── Another separator ─────────────────────────────────────────────────
     auto* vsep2 = new QFrame;
     vsep2->setFrameShape(QFrame::VLine);
-    vsep2->setFixedHeight(20);
-    vsep2->setStyleSheet("color: #c0c0c0;");
-    fl->addWidget(vsep2);
-    fl->addSpacing(4);
+    vsep2->setFixedHeight(18);
+    vsep2->setStyleSheet("color:#c8c8c8;");
+    hl->addWidget(vsep2);
+    hl->addSpacing(3);
 
-    // Formula / value input bar (takes remaining space)
+    // ── Formula / value input ─────────────────────────────────────────────
     m_formulaBar = new QLineEdit;
-    m_formulaBar->setObjectName("formulaBar");
-    m_formulaBar->setFixedHeight(24);
-    m_formulaBar->setPlaceholderText("Enter value or formula...");
+    m_formulaBar->setFixedHeight(22);
     m_formulaBar->setStyleSheet(
-        "QLineEdit { border: 1px solid #c0c0c0; border-radius: 2px; "
-        "font-size: 12px; background: white; padding: 0 6px; }"
-        "QLineEdit:focus { border-color: #1e7145; }"
+        "QLineEdit { border:1px solid #c8c8c8; border-radius:2px; background:white; "
+        "font-size:12px; font-family:'Segoe UI',Arial; padding:0 6px; }"
+        "QLineEdit:focus { border-color:#1e7145; }"
     );
-    fl->addWidget(m_formulaBar, 1);
+    hl->addWidget(m_formulaBar, 1);
 
-    // Connect formula bar interactions
+    // Connections
     connect(m_formulaBar, &QLineEdit::returnPressed, this, &MainWindow::onFormulaBarReturn);
-    connect(m_formulaBar, &QLineEdit::textEdited, this, [this](const QString&){
+    connect(m_formulaBar, &QLineEdit::textEdited,    this, [this](const QString&){
         m_formulaEditing = true;
-        m_statusReady->setText("Edit");
+        if (m_statusReady) m_statusReady->setText("Edit");
     });
-
-    // Name box: navigate to cell when Enter pressed
     connect(m_nameBox, &QLineEdit::returnPressed, this, [this]{
         QString ref = m_nameBox->text().trimmed().toUpper();
-        if (ref.isEmpty()) return;
-        // Parse "A1" → row/col
         QRegularExpression re("^([A-Z]+)(\\d+)$");
         auto m = re.match(ref);
         if (m.hasMatch()) {
@@ -237,160 +249,215 @@ void MainWindow::setupFormulaBar() {
             m_view->setFocus();
         }
     });
+
+    return bar;
 }
 
-// ── Sheet Tab Bar ─────────────────────────────────────────────────────────────
-void MainWindow::setupSheetBar() {
-    auto* sheetBarWidget = new QWidget;
-    sheetBarWidget->setObjectName("sheetBarWidget");
-    sheetBarWidget->setFixedHeight(28);
-    sheetBarWidget->setStyleSheet("background: #f0f0f0; border-top: 1px solid #c0c0c0;");
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SHEET TAB BAR  (WPS-style bottom bar)
+// ═══════════════════════════════════════════════════════════════════════════════
+QWidget* MainWindow::buildSheetBar() {
+    auto* bar = new QWidget;
+    bar->setObjectName("sheetBarWidget");
+    bar->setFixedHeight(30);
+    bar->setStyleSheet(
+        "QWidget#sheetBarWidget { background:#f0f0f0; border-top:1px solid #d0d0d0; }"
+    );
 
-    auto* hl = new QHBoxLayout(sheetBarWidget);
-    hl->setContentsMargins(4, 0, 4, 0);
+    auto* hl = new QHBoxLayout(bar);
+    hl->setContentsMargins(4,2,4,2);
     hl->setSpacing(2);
 
-    // Navigation buttons (scroll sheet tabs)
-    auto makeNavBtn = [](const QString& t, const QString& tip) {
-        auto* btn = new QToolButton;
-        btn->setText(t);
-        btn->setToolTip(tip);
-        btn->setFixedSize(18, 18);
-        btn->setStyleSheet("QToolButton { border: 1px solid #c0c0c0; border-radius: 2px; "
-                           "background: #e8e8e8; font-size: 9px; color: #666; }"
-                           "QToolButton:hover { background: #d8d8d8; }");
-        return btn;
+    // Nav arrows (WPS style: ◀◀ ◀ ▶ ▶▶)
+    auto mkNav = [&](const QString& ch, const QString& tip) {
+        auto* b = new QToolButton;
+        b->setText(ch); b->setToolTip(tip);
+        b->setFixedSize(20,20);
+        b->setStyleSheet(
+            "QToolButton { border:1px solid #c8c8c8; border-radius:2px; background:#e8e8e8; "
+            "font-size:9px; color:#555; }"
+            "QToolButton:hover { background:#d0d0d0; color:#1a6b35; }"
+            "QToolButton:pressed { background:#c0c0c0; }"
+        );
+        return b;
     };
+    auto* btnFirst = mkNav("◀◀","First sheet");
+    auto* btnPrev  = mkNav("◀", "Previous sheet");
+    auto* btnNext  = mkNav("▶", "Next sheet");
+    auto* btnLast  = mkNav("▶▶","Last sheet");
 
-    auto* btnFirst = makeNavBtn("◀◀", "First sheet");
-    auto* btnPrev  = makeNavBtn("◀",  "Previous sheet");
-    auto* btnNext  = makeNavBtn("▶",  "Next sheet");
-    auto* btnLast  = makeNavBtn("▶▶", "Last sheet");
     hl->addWidget(btnFirst); hl->addWidget(btnPrev);
     hl->addWidget(btnNext);  hl->addWidget(btnLast);
-    hl->addSpacing(4);
+    hl->addSpacing(6);
 
     // Sheet tabs
     m_sheetBar = new QTabBar;
-    m_sheetBar->setTabsClosable(false);
+    m_sheetBar->setExpanding(false);
     m_sheetBar->setMovable(true);
     m_sheetBar->setDrawBase(false);
-    m_sheetBar->setExpanding(false);
+    m_sheetBar->setElideMode(Qt::ElideRight);
     m_sheetBar->setFixedHeight(26);
     m_sheetBar->setStyleSheet(
-        "QTabBar { background: transparent; }"
-        "QTabBar::tab { min-width: 70px; max-width: 160px; height: 22px; "
-        "  padding: 2px 12px; margin-right: 2px; font-size: 11px; "
-        "  border: 1px solid #b0b0b0; border-bottom: none; border-radius: 3px 3px 0 0; "
-        "  background: #e0e0e0; color: #444; }"
-        "QTabBar::tab:selected { background: #ffffff; color: #1a6b35; "
-        "  font-weight: 600; border-color: #b0b0b0; border-bottom: 2px solid #1e7145; }"
-        "QTabBar::tab:hover:!selected { background: #ececec; }"
+        "QTabBar { background:transparent; }"
+        "QTabBar::tab {"
+        "  min-width:80px; max-width:180px; height:24px;"
+        "  padding:0 14px; margin-right:2px; font-size:11px;"
+        "  font-family:'Segoe UI',Arial;"
+        "  border:1px solid #c0c0c0; border-bottom:none;"
+        "  border-radius:3px 3px 0 0;"
+        "  background:#e4e4e4; color:#555;"
+        "}"
+        "QTabBar::tab:selected {"
+        "  background:#ffffff; color:#1a6b35; font-weight:600;"
+        "  border-bottom:2px solid #1e7145;"
+        "}"
+        "QTabBar::tab:hover:!selected { background:#efefef; color:#333; }"
     );
     hl->addWidget(m_sheetBar, 1);
 
     // Add sheet "+" button
     m_addSheetBtn = new QToolButton;
     m_addSheetBtn->setText("+");
-    m_addSheetBtn->setToolTip("Add sheet");
-    m_addSheetBtn->setFixedSize(22, 22);
+    m_addSheetBtn->setToolTip("Insert Sheet");
+    m_addSheetBtn->setFixedSize(24,24);
     m_addSheetBtn->setStyleSheet(
-        "QToolButton { border: 1px solid #c0c0c0; border-radius: 11px; "
-        "background: #e8e8e8; font-size: 14px; color: #555; font-weight: bold; }"
-        "QToolButton:hover { background: #d0d0d0; color: #1a6b35; }"
+        "QToolButton { border:1px solid #c8c8c8; border-radius:12px; "
+        "background:#e8e8e8; font-size:14px; color:#666; font-weight:bold; }"
+        "QToolButton:hover { background:#1e7145; color:white; border-color:#1e7145; }"
     );
     hl->addWidget(m_addSheetBtn);
 
     // Connections
-    connect(m_sheetBar,   &QTabBar::currentChanged,     this, &MainWindow::switchSheet);
-    connect(m_sheetBar,   &QTabBar::tabBarDoubleClicked,this, &MainWindow::renameSheet);
-    connect(m_addSheetBtn,&QToolButton::clicked,         this, &MainWindow::addSheet);
+    connect(m_sheetBar,   &QTabBar::currentChanged,      this, &MainWindow::switchSheet);
+    connect(m_sheetBar,   &QTabBar::tabBarDoubleClicked,  this, &MainWindow::renameSheet);
+    connect(m_addSheetBtn,&QToolButton::clicked,          this, &MainWindow::addSheet);
+    connect(btnFirst,&QToolButton::clicked,this,[this]{ m_sheetBar->setCurrentIndex(0); });
+    connect(btnLast, &QToolButton::clicked,this,[this]{ m_sheetBar->setCurrentIndex(m_sheetBar->count()-1); });
+    connect(btnPrev, &QToolButton::clicked,this,[this]{ m_sheetBar->setCurrentIndex(qMax(0,m_sheetBar->currentIndex()-1)); });
+    connect(btnNext, &QToolButton::clicked,this,[this]{ m_sheetBar->setCurrentIndex(qMin(m_sheetBar->count()-1,m_sheetBar->currentIndex()+1)); });
 
-    // Nav button connections
-    connect(btnFirst, &QToolButton::clicked, this, [this]{ m_sheetBar->setCurrentIndex(0); });
-    connect(btnLast,  &QToolButton::clicked, this, [this]{ m_sheetBar->setCurrentIndex(m_sheetBar->count()-1); });
-    connect(btnPrev,  &QToolButton::clicked, this, [this]{
-        m_sheetBar->setCurrentIndex(qMax(0, m_sheetBar->currentIndex()-1)); });
-    connect(btnNext,  &QToolButton::clicked, this, [this]{
-        m_sheetBar->setCurrentIndex(qMin(m_sheetBar->count()-1, m_sheetBar->currentIndex()+1)); });
-
-    // Right-click context menu on tabs
+    // Right-click context menu
     m_sheetBar->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(m_sheetBar, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos){
+    connect(m_sheetBar,&QWidget::customContextMenuRequested,this,[this](const QPoint& pos){
         int idx = m_sheetBar->tabAt(pos);
-        if (idx < 0) return;
-        QMenu menu;
-        menu.addAction("Rename",  [this,idx]{ renameSheet(idx); });
-        menu.addAction("Delete",  [this]{ removeSheet(); });
-        menu.addSeparator();
-        menu.addAction("Insert Sheet...", [this]{ addSheet(); });
+        QMenu menu(this);
+        menu.setStyleSheet("QMenu{font-size:12px;} QMenu::item{padding:5px 20px;} QMenu::item:selected{background:#e8f5ee;color:#1a6b35;}");
+        menu.addAction("Insert Sheet",  this, &MainWindow::addSheet);
+        if (idx >= 0) {
+            menu.addAction("Delete Sheet",  this, &MainWindow::removeSheet);
+            menu.addAction("Rename Sheet",  [this,idx]{ renameSheet(idx); });
+            menu.addSeparator();
+            menu.addAction("Move/Copy Sheet...", this, [this]{ QMessageBox::information(this,"Move/Copy","Not yet implemented"); });
+        }
         menu.exec(m_sheetBar->mapToGlobal(pos));
     });
+
+    return bar;
 }
 
-// ── Status Bar ────────────────────────────────────────────────────────────────
-void MainWindow::setupStatusBar() {
+// ═══════════════════════════════════════════════════════════════════════════════
+//  STATUS BAR  (WPS-style: Ready | mode | stats ... zoom)
+// ═══════════════════════════════════════════════════════════════════════════════
+void MainWindow::buildStatusBar() {
     auto* sb = statusBar();
+    sb->setSizeGripEnabled(false);
     sb->setStyleSheet(
-        "QStatusBar { background: #f0f0f0; border-top: 1px solid #c0c0c0; font-size: 11px; }"
-        "QStatusBar::item { border: none; }"
+        "QStatusBar { background:#f0f0f0; border-top:1px solid #d0d0d0; "
+        "font-size:11px; font-family:'Segoe UI',Arial; color:#555; min-height:24px; }"
+        "QStatusBar::item { border:none; }"
     );
 
-    // Left: Ready indicator with green dot
-    m_statusReady = new QLabel("Ready");
-    m_statusReady->setStyleSheet("color: #444; padding: 0 8px;");
-    sb->addWidget(m_statusReady);
+    // Left: small green dot + "Ready"
+    auto* readyWidget = new QWidget;
+    readyWidget->setStyleSheet("background:transparent;");
+    auto* readyHL = new QHBoxLayout(readyWidget);
+    readyHL->setContentsMargins(6,0,6,0); readyHL->setSpacing(5);
 
-    // Separator
+    auto* greenDot = new QLabel;
+    {
+        QPixmap pm(10,10); pm.fill(Qt::transparent);
+        QPainter p(&pm); p.setRenderHint(QPainter::Antialiasing);
+        p.setBrush(QColor("#1e7145")); p.setPen(Qt::NoPen);
+        p.drawEllipse(1,1,8,8);
+        greenDot->setPixmap(pm);
+    }
+    m_statusReady = new QLabel("Ready");
+    m_statusReady->setStyleSheet("color:#444; font-size:11px;");
+    readyHL->addWidget(greenDot);
+    readyHL->addWidget(m_statusReady);
+    sb->addWidget(readyWidget);
+
+    // Thin separator
     auto* sep1 = new QFrame; sep1->setFrameShape(QFrame::VLine);
-    sep1->setStyleSheet("color: #c0c0c0;"); sep1->setFixedHeight(14);
+    sep1->setFixedHeight(14); sep1->setStyleSheet("color:#c8c8c8;");
     sb->addWidget(sep1);
 
-    // Cell mode indicator
-    m_statusMode = new QLabel("Ready");
-    m_statusMode->setStyleSheet("color: #666; padding: 0 8px;");
+    // Cell mode
+    m_statusMode = new QLabel("Normal");
+    m_statusMode->setStyleSheet("color:#666; font-size:11px; padding:0 8px;");
     sb->addWidget(m_statusMode);
 
-    // Progress bar (hidden by default)
+    // Progress bar (hidden)
     m_progress = new QProgressBar;
-    m_progress->setFixedWidth(180);
-    m_progress->setFixedHeight(14);
+    m_progress->setFixedSize(160,12);
     m_progress->setVisible(false);
+    m_progress->setTextVisible(false);
     m_progress->setStyleSheet(
-        "QProgressBar { border: 1px solid #c0c0c0; border-radius: 2px; background: #e8e8e8; }"
-        "QProgressBar::chunk { background: #1e7145; border-radius: 1px; }"
+        "QProgressBar { border:1px solid #c0c0c0; border-radius:2px; background:#e8e8e8; }"
+        "QProgressBar::chunk { background:#1e7145; border-radius:1px; }"
     );
     sb->addWidget(m_progress);
 
-    // Right side: selection stats
+    // ── RIGHT SIDE ──────────────────────────────────────────────────────────
+
+    // Selection stats (Average / Count / Sum) — WPS shows these prominently
     m_statusStats = new QLabel;
-    m_statusStats->setStyleSheet("color: #444; padding: 0 12px;");
-    m_statusStats->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    m_statusStats->setStyleSheet("color:#444; font-size:11px; padding:0 12px;");
+    m_statusStats->setAlignment(Qt::AlignRight|Qt::AlignVCenter);
     sb->addPermanentWidget(m_statusStats);
 
-    // Separator before zoom
+    // Separator
     auto* sep2 = new QFrame; sep2->setFrameShape(QFrame::VLine);
-    sep2->setStyleSheet("color: #c0c0c0;"); sep2->setFixedHeight(14);
+    sep2->setFixedHeight(14); sep2->setStyleSheet("color:#c8c8c8;");
     sb->addPermanentWidget(sep2);
 
-    // View mode buttons (Normal / Page Layout / Page Break)
-    auto makeViewBtn = [&](const QString& tip) {
+    // View mode buttons (Normal / Page Layout / Page Break preview) — WPS-style icons
+    auto mkViewBtn = [&](const QIcon& icon, const QString& tip) {
         auto* btn = new QToolButton;
-        btn->setToolTip(tip);
-        btn->setFixedSize(18, 18);
-        btn->setCheckable(true);
+        btn->setIcon(icon); btn->setIconSize(QSize(16,16));
+        btn->setToolTip(tip); btn->setCheckable(true);
+        btn->setFixedSize(22,22); btn->setAutoRaise(true);
         btn->setStyleSheet(
-            "QToolButton { border: 1px solid transparent; border-radius: 2px; background: transparent; }"
-            "QToolButton:hover { border-color: #c0c0c0; background: #e0e0e0; }"
-            "QToolButton:checked { background: #c8e6d0; border-color: #2d7d46; }"
+            "QToolButton { border:1px solid transparent; border-radius:2px; background:transparent; }"
+            "QToolButton:hover { border-color:#c0c0c0; background:#e0e0e0; }"
+            "QToolButton:checked { background:#c8e6d4; border-color:#1e7145; }"
         );
         return btn;
     };
-    auto* btnNormal = makeViewBtn("Normal view");
-    auto* btnPage   = makeViewBtn("Page layout view");
-    auto* btnBreak  = makeViewBtn("Page break view");
-    // Draw simple icons using text
-    btnNormal->setText("▦"); btnPage->setText("▤"); btnBreak->setText("▨");
+
+    auto* btnNormal = mkViewBtn(shellIcon([](QPainter& p,int s){
+        p.setPen(QPen(QColor("#555"),1)); p.setBrush(Qt::NoBrush);
+        p.drawRect(2,2,s-4,s-4);
+        p.setPen(QPen(QColor("#555"),0.8));
+        p.drawLine(2,s/3+2,s-2,s/3+2); p.drawLine(2,2*s/3+2,s-2,2*s/3+2);
+        p.drawLine(s/3+2,2,s/3+2,s-2); p.drawLine(2*s/3+2,2,2*s/3+2,s-2);
+    }), "Normal View");
+
+    auto* btnPage = mkViewBtn(shellIcon([](QPainter& p,int s){
+        p.setPen(QPen(QColor("#555"),1)); p.setBrush(QColor("#e8e8e8"));
+        p.drawRect(3,2,s-8,s-4);
+        p.setBrush(Qt::white); p.drawRect(2,1,s-8,s-4);
+        p.setPen(QPen(QColor("#555"),0.7));
+        p.drawLine(2,5,s-6,5); p.drawLine(2,8,s-6,8); p.drawLine(2,11,s-6,11);
+    }), "Page Layout View");
+
+    auto* btnBreak = mkViewBtn(shellIcon([](QPainter& p,int s){
+        p.setPen(QPen(QColor("#555"),1)); p.setBrush(Qt::NoBrush);
+        p.drawRect(2,2,s-4,s-4);
+        p.setPen(QPen(QColor("#1e7145"),1.5,Qt::DashLine));
+        p.drawLine(s/2,2,s/2,s-2); p.drawLine(2,s/2,s-2,s/2);
+    }), "Page Break Preview");
+
     btnNormal->setChecked(true);
     sb->addPermanentWidget(btnNormal);
     sb->addPermanentWidget(btnPage);
@@ -398,259 +465,237 @@ void MainWindow::setupStatusBar() {
 
     // Separator
     auto* sep3 = new QFrame; sep3->setFrameShape(QFrame::VLine);
-    sep3->setStyleSheet("color: #c0c0c0;"); sep3->setFixedHeight(14);
+    sep3->setFixedHeight(14); sep3->setStyleSheet("color:#c8c8c8;");
     sb->addPermanentWidget(sep3);
-
-    // Zoom out button
-    auto* zoomOut = new QToolButton;
-    zoomOut->setText("−");
-    zoomOut->setFixedSize(18, 18);
-    zoomOut->setStyleSheet("QToolButton { border: 1px solid #c0c0c0; border-radius: 2px; "
-                           "background: #e8e8e8; font-size: 12px; }"
-                           "QToolButton:hover { background: #d0d0d0; }");
-    sb->addPermanentWidget(zoomOut);
-
-    // Zoom slider
-    m_zoomSlider = new QSlider(Qt::Horizontal);
-    m_zoomSlider->setRange(50, 200);
-    m_zoomSlider->setValue(100);
-    m_zoomSlider->setFixedWidth(80);
-    m_zoomSlider->setFixedHeight(16);
-    m_zoomSlider->setTickInterval(50);
-    m_zoomSlider->setStyleSheet(
-        "QSlider::groove:horizontal { height: 3px; background: #c0c0c0; border-radius: 1px; }"
-        "QSlider::handle:horizontal { width: 12px; height: 12px; margin: -5px 0; "
-        "  background: #1e7145; border-radius: 6px; }"
-        "QSlider::sub-page:horizontal { background: #1e7145; border-radius: 1px; }"
-    );
-    sb->addPermanentWidget(m_zoomSlider);
-
-    // Zoom in button
-    auto* zoomIn = new QToolButton;
-    zoomIn->setText("+");
-    zoomIn->setFixedSize(18, 18);
-    zoomIn->setStyleSheet(zoomOut->styleSheet());
-    sb->addPermanentWidget(zoomIn);
 
     // Zoom percentage label
     m_zoomLabel = new QLabel("100%");
-    m_zoomLabel->setFixedWidth(36);
+    m_zoomLabel->setFixedWidth(38);
     m_zoomLabel->setAlignment(Qt::AlignCenter);
-    m_zoomLabel->setStyleSheet("color: #444; font-size: 11px;");
+    m_zoomLabel->setStyleSheet("color:#444; font-size:11px; cursor:pointer;");
     m_zoomLabel->setCursor(Qt::PointingHandCursor);
     sb->addPermanentWidget(m_zoomLabel);
 
+    // Zoom slider
+    m_zoomSlider = new QSlider(Qt::Horizontal);
+    m_zoomSlider->setRange(50,200); m_zoomSlider->setValue(100);
+    m_zoomSlider->setFixedWidth(90); m_zoomSlider->setFixedHeight(16);
+    m_zoomSlider->setTickInterval(50);
+    m_zoomSlider->setStyleSheet(
+        "QSlider::groove:horizontal { height:3px; background:#c8c8c8; border-radius:2px; margin:0; }"
+        "QSlider::handle:horizontal { width:14px; height:14px; margin:-6px 0; "
+        "  background:white; border:2px solid #1e7145; border-radius:7px; }"
+        "QSlider::sub-page:horizontal { background:#1e7145; border-radius:2px; }"
+    );
+    sb->addPermanentWidget(m_zoomSlider);
+
+    // Zoom in/out buttons
+    auto mkZoom = [&](const QString& t, int delta) {
+        auto* b = new QToolButton;
+        b->setText(t); b->setFixedSize(20,20);
+        b->setStyleSheet(
+            "QToolButton { border:1px solid #c8c8c8; border-radius:2px; background:#e8e8e8; "
+            "font-size:12px; font-weight:bold; color:#555; }"
+            "QToolButton:hover { background:#d0e8d8; border-color:#1e7145; color:#1a6b35; }"
+        );
+        connect(b, &QToolButton::clicked, this, [this,delta]{ setZoom(m_zoomPercent+delta); });
+        return b;
+    };
+    sb->addPermanentWidget(mkZoom("−",-10));
+    sb->addPermanentWidget(mkZoom("+",+10));
+
     // Connect zoom
     connect(m_zoomSlider, &QSlider::valueChanged, this, &MainWindow::onZoomChanged);
-    connect(zoomOut, &QToolButton::clicked, this, [this]{
-        setZoom(qMax(50, m_zoomPercent - 10)); });
-    connect(zoomIn,  &QToolButton::clicked, this, [this]{
-        setZoom(qMin(200, m_zoomPercent + 10)); });
     connect(m_zoomLabel, &QLabel::linkActivated, this, [this]{
         bool ok;
-        int z = QInputDialog::getInt(this, "Zoom", "Zoom %:", m_zoomPercent, 50, 200, 10, &ok);
-        if (ok) setZoom(z);
-    });
-    // Make zoom label clickable
-    m_zoomLabel->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(m_zoomLabel, &QLabel::customContextMenuRequested, this, [this](const QPoint&){
-        bool ok;
-        int z = QInputDialog::getInt(this, "Zoom", "Zoom %:", m_zoomPercent, 50, 200, 10, &ok);
+        int z = QInputDialog::getInt(this,"Zoom","Zoom %:",m_zoomPercent,50,200,10,&ok);
         if (ok) setZoom(z);
     });
 }
 
-// ── Connect Ribbon ────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  RIBBON CONNECTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
 void MainWindow::connectRibbon() {
-    // File
-    connect(m_ribbon, &RibbonWidget::newFileRequested,  this, &MainWindow::newFile);
-    connect(m_ribbon, &RibbonWidget::openFileRequested, this, &MainWindow::openFile);
-    connect(m_ribbon, &RibbonWidget::saveFileRequested, this, &MainWindow::saveFile);
-    connect(m_ribbon, &RibbonWidget::saveAsRequested,   this, &MainWindow::saveFileAs);
+    connect(m_ribbon,&RibbonWidget::newFileRequested,  this,&MainWindow::newFile);
+    connect(m_ribbon,&RibbonWidget::openFileRequested, this,&MainWindow::openFile);
+    connect(m_ribbon,&RibbonWidget::saveFileRequested, this,&MainWindow::saveFile);
+    connect(m_ribbon,&RibbonWidget::saveAsRequested,   this,&MainWindow::saveFileAs);
 
-    // Clipboard
-    connect(m_ribbon, &RibbonWidget::pasteRequested, this, [this]{
-        QApplication::sendEvent(m_view,
-            new QKeyEvent(QEvent::KeyPress, Qt::Key_V, Qt::ControlModifier)); });
-    connect(m_ribbon, &RibbonWidget::cutRequested, this, [this]{
-        m_core->clearCell(currentSheet(), m_view->currentRow(), m_view->currentCol()); });
-    connect(m_ribbon, &RibbonWidget::copyRequested, this, [this]{
-        QApplication::sendEvent(m_view,
-            new QKeyEvent(QEvent::KeyPress, Qt::Key_C, Qt::ControlModifier)); });
-    connect(m_ribbon, &RibbonWidget::formatPainterRequested, this, [this]{
-        m_statusReady->setText("Format Painter active — click a cell to apply"); });
+    connect(m_ribbon,&RibbonWidget::pasteRequested, this,[this]{
+        QApplication::sendEvent(m_view,new QKeyEvent(QEvent::KeyPress,Qt::Key_V,Qt::ControlModifier)); });
+    connect(m_ribbon,&RibbonWidget::cutRequested,   this,[this]{
+        m_core->clearCell(currentSheet(),m_view->currentRow(),m_view->currentCol()); });
+    connect(m_ribbon,&RibbonWidget::copyRequested,  this,[this]{
+        QApplication::sendEvent(m_view,new QKeyEvent(QEvent::KeyPress,Qt::Key_C,Qt::ControlModifier)); });
+    connect(m_ribbon,&RibbonWidget::formatPainterRequested,this,[this]{
+        m_statusReady->setText("Format Painter — click a cell"); });
 
-    // Font
-    connect(m_ribbon, &RibbonWidget::fontFamilyChanged, m_view, &SpreadsheetView::applyFontFamily);
-    connect(m_ribbon, &RibbonWidget::fontSizeChanged,   m_view, &SpreadsheetView::applyFontSize);
-    connect(m_ribbon, &RibbonWidget::boldToggled,       m_view, &SpreadsheetView::applyBold);
-    connect(m_ribbon, &RibbonWidget::italicToggled,     m_view, &SpreadsheetView::applyItalic);
-    connect(m_ribbon, &RibbonWidget::underlineToggled,  m_view, &SpreadsheetView::applyUnderline);
-    connect(m_ribbon, &RibbonWidget::textColorChanged,  m_view, &SpreadsheetView::applyTextColor);
-    connect(m_ribbon, &RibbonWidget::fillColorChanged,  m_view, &SpreadsheetView::applyFillColor);
+    connect(m_ribbon,&RibbonWidget::fontFamilyChanged, m_view,&SpreadsheetView::applyFontFamily);
+    connect(m_ribbon,&RibbonWidget::fontSizeChanged,   m_view,&SpreadsheetView::applyFontSize);
+    connect(m_ribbon,&RibbonWidget::boldToggled,       m_view,&SpreadsheetView::applyBold);
+    connect(m_ribbon,&RibbonWidget::italicToggled,     m_view,&SpreadsheetView::applyItalic);
+    connect(m_ribbon,&RibbonWidget::underlineToggled,  m_view,&SpreadsheetView::applyUnderline);
+    connect(m_ribbon,&RibbonWidget::textColorChanged,  m_view,&SpreadsheetView::applyTextColor);
+    connect(m_ribbon,&RibbonWidget::fillColorChanged,  m_view,&SpreadsheetView::applyFillColor);
 
-    // Alignment
-    connect(m_ribbon, &RibbonWidget::hAlignChanged,      m_view, &SpreadsheetView::applyHAlign);
-    connect(m_ribbon, &RibbonWidget::vAlignChanged,      m_view, &SpreadsheetView::applyVAlign);
-    connect(m_ribbon, &RibbonWidget::wrapTextToggled,    m_view, &SpreadsheetView::applyWrapText);
-    connect(m_ribbon, &RibbonWidget::mergeCellsRequested,m_view, &SpreadsheetView::mergeSelected);
+    connect(m_ribbon,&RibbonWidget::hAlignChanged,       m_view,&SpreadsheetView::applyHAlign);
+    connect(m_ribbon,&RibbonWidget::vAlignChanged,       m_view,&SpreadsheetView::applyVAlign);
+    connect(m_ribbon,&RibbonWidget::wrapTextToggled,     m_view,&SpreadsheetView::applyWrapText);
+    connect(m_ribbon,&RibbonWidget::mergeCellsRequested, m_view,&SpreadsheetView::mergeSelected);
 
-    // Number
-    connect(m_ribbon, &RibbonWidget::numberFormatChanged,m_view, &SpreadsheetView::applyNumberFormat);
-    connect(m_ribbon, &RibbonWidget::increaseDecimalRequested, this, [this]{
-        auto fmt = m_view->currentCellFormat(); fmt.decimals++; m_view->applyFormat(fmt); });
-    connect(m_ribbon, &RibbonWidget::decreaseDecimalRequested, this, [this]{
-        auto fmt = m_view->currentCellFormat();
-        fmt.decimals = qMax(0, fmt.decimals-1); m_view->applyFormat(fmt); });
+    connect(m_ribbon,&RibbonWidget::numberFormatChanged,m_view,&SpreadsheetView::applyNumberFormat);
+    connect(m_ribbon,&RibbonWidget::increaseDecimalRequested,this,[this]{
+        auto fmt=m_view->currentCellFormat(); fmt.decimals++; m_view->applyFormat(fmt); });
+    connect(m_ribbon,&RibbonWidget::decreaseDecimalRequested,this,[this]{
+        auto fmt=m_view->currentCellFormat(); fmt.decimals=qMax(0,fmt.decimals-1); m_view->applyFormat(fmt); });
 
-    // Cells
-    connect(m_ribbon, &RibbonWidget::insertRowRequested,    m_view, &SpreadsheetView::insertRow);
-    connect(m_ribbon, &RibbonWidget::deleteRowRequested,    m_view, &SpreadsheetView::deleteRow);
-    connect(m_ribbon, &RibbonWidget::insertColumnRequested, m_view, &SpreadsheetView::insertColumn);
-    connect(m_ribbon, &RibbonWidget::deleteColumnRequested, m_view, &SpreadsheetView::deleteColumn);
-    connect(m_ribbon, &RibbonWidget::formatCellsRequested,  this, [this]{
-        FormatCellsDialog dlg(m_view->currentCellFormat(), this);
-        if (dlg.exec() == QDialog::Accepted) m_view->applyFormat(dlg.result()); });
+    connect(m_ribbon,&RibbonWidget::insertRowRequested,    m_view,&SpreadsheetView::insertRow);
+    connect(m_ribbon,&RibbonWidget::deleteRowRequested,    m_view,&SpreadsheetView::deleteRow);
+    connect(m_ribbon,&RibbonWidget::insertColumnRequested, m_view,&SpreadsheetView::insertColumn);
+    connect(m_ribbon,&RibbonWidget::deleteColumnRequested, m_view,&SpreadsheetView::deleteColumn);
+    connect(m_ribbon,&RibbonWidget::formatCellsRequested,  this,[this]{
+        FormatCellsDialog dlg(m_view->currentCellFormat(),this);
+        if (dlg.exec()==QDialog::Accepted) m_view->applyFormat(dlg.result()); });
 
-    // Editing
-    connect(m_ribbon, &RibbonWidget::autoSumRequested,    m_view, &SpreadsheetView::autoSum);
-    connect(m_ribbon, &RibbonWidget::sortAscRequested,    m_view, &SpreadsheetView::sortAsc);
-    connect(m_ribbon, &RibbonWidget::sortDescRequested,   m_view, &SpreadsheetView::sortDesc);
-    connect(m_ribbon, &RibbonWidget::filterRequested, this, [this]{
+    connect(m_ribbon,&RibbonWidget::autoSumRequested,   m_view,&SpreadsheetView::autoSum);
+    connect(m_ribbon,&RibbonWidget::sortAscRequested,   m_view,&SpreadsheetView::sortAsc);
+    connect(m_ribbon,&RibbonWidget::sortDescRequested,  m_view,&SpreadsheetView::sortDesc);
+    connect(m_ribbon,&RibbonWidget::filterRequested,    this,[this]{
         m_statusReady->setText("Filter — not yet implemented"); });
-    connect(m_ribbon, &RibbonWidget::findReplaceRequested, this, [this]{
-        auto* dlg = new FindReplaceDialog(m_core, currentSheet(), this);
+    connect(m_ribbon,&RibbonWidget::findReplaceRequested,this,[this]{
+        auto* dlg=new FindReplaceDialog(m_core,currentSheet(),this);
         dlg->setAttribute(Qt::WA_DeleteOnClose); dlg->show(); });
 }
 
-// ── Connect View ──────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  VIEW CONNECTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
 void MainWindow::connectView() {
-    // Selection → formula bar + ribbon state
-    connect(m_view, &SpreadsheetView::selectionFormatChanged,
-            this,   &MainWindow::onSelectionChanged);
-
-    // Selection → status bar stats
-    connect(m_view->publicSelectionModel(), &QItemSelectionModel::selectionChanged,
-            this, [this]{ updateSelectionStats(); });
+    connect(m_view,&SpreadsheetView::selectionFormatChanged,
+            this,  &MainWindow::onSelectionChanged);
+    connect(m_view->publicSelectionModel(),&QItemSelectionModel::selectionChanged,
+            this,[this]{ updateSelectionStats(); });
 }
 
-// ── Selection Changed ─────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SELECTION → FORMULA BAR + RIBBON
+// ═══════════════════════════════════════════════════════════════════════════════
 void MainWindow::onSelectionChanged(const CellFormat& fmt, const QString& ref) {
-    // Update name box
     m_nameBox->setText(ref);
 
-    // Update formula bar with cell content
-    Cell cell = m_core->getCell(currentSheet(),
-                                m_view->currentRow(), m_view->currentCol());
+    Cell cell = m_core->getCell(currentSheet(),m_view->currentRow(),m_view->currentCol());
     m_formulaBar->blockSignals(true);
-    m_formulaBar->setText(cell.formula.isEmpty()
-        ? cell.rawValue.toString() : cell.formula);
+    m_formulaBar->setText(cell.formula.isEmpty() ? cell.rawValue.toString() : cell.formula);
     m_formulaBar->blockSignals(false);
     m_formulaEditing = false;
-    m_statusReady->setText("Ready");
+    if (m_statusReady) m_statusReady->setText("Ready");
 
-    // Update ribbon format state
-    RibbonFormatState state;
-    state.fontFamily   = fmt.font.family().isEmpty() ? "Calibri" : fmt.font.family();
-    state.fontSize     = fmt.font.pointSize() > 0 ? fmt.font.pointSize() : 11;
-    state.bold         = fmt.bold;
-    state.italic       = fmt.italic;
-    state.underline    = fmt.underline;
-    state.textColor    = fmt.textColor;
-    state.fillColor    = fmt.fillColor;
-    state.numberFormat = fmt.numberFormat;
-    state.wrapText     = fmt.wrapText;
-    state.hAlign       = (fmt.alignment & Qt::AlignRight) ? 2 :
-                         (fmt.alignment & Qt::AlignHCenter) ? 1 : 0;
-    m_ribbon->setFormatState(state);
+    RibbonFormatState s;
+    s.fontFamily   = fmt.font.family().isEmpty() ? "Calibri" : fmt.font.family();
+    s.fontSize     = fmt.font.pointSize()>0 ? fmt.font.pointSize() : 11;
+    s.bold         = fmt.bold;
+    s.italic       = fmt.italic;
+    s.underline    = fmt.underline;
+    s.textColor    = fmt.textColor;
+    s.fillColor    = fmt.fillColor;
+    s.numberFormat = fmt.numberFormat;
+    s.wrapText     = fmt.wrapText;
+    s.hAlign       = (fmt.alignment & Qt::AlignRight) ? 2 :
+                     (fmt.alignment & Qt::AlignHCenter) ? 1 : 0;
+    m_ribbon->setFormatState(s);
 }
 
-// ── Formula Bar Return ────────────────────────────────────────────────────────
+void MainWindow::onFormatChanged(const CellFormat& fmt, const QString& ref) {
+    onSelectionChanged(fmt, ref);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  FORMULA BAR COMMIT
+// ═══════════════════════════════════════════════════════════════════════════════
 void MainWindow::onFormulaBarReturn() {
     QString text = m_formulaBar->text();
     int r = m_view->currentRow(), c = m_view->currentCol();
     if (r < 0 || c < 0) return;
     if (text.startsWith('='))
-        m_core->setCellFormula(currentSheet(), r, c, text);
+        m_core->setCellFormula(currentSheet(),r,c,text);
     else
-        m_core->setCellValue(currentSheet(), r, c, text);
+        m_core->setCellValue(currentSheet(),r,c,text);
     setModified(true);
     m_formulaEditing = false;
-    m_statusReady->setText("Ready");
+    if (m_statusReady) m_statusReady->setText("Ready");
     m_view->setFocus();
 }
 
-// ── Update Selection Stats ─────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SELECTION STATS  (Average / Count / Sum like WPS bottom bar)
+// ═══════════════════════════════════════════════════════════════════════════════
 void MainWindow::updateSelectionStats() {
-    auto selected = m_view->publicSelectedIndexes();
-    if (selected.isEmpty()) { m_statusStats->clear(); return; }
+    auto sel = m_view->publicSelectedIndexes();
+    if (sel.isEmpty()) { if (m_statusStats) m_statusStats->clear(); return; }
 
-    double sum = 0; int count = 0; int numCount = 0;
+    double sum=0; int count=0; int numCount=0;
     SheetId s = currentSheet();
-    for (auto& idx : selected) {
-        Cell cell = m_core->getCell(s, idx.row(), idx.column());
+    for (auto& idx : sel) {
+        Cell cell = m_core->getCell(s,idx.row(),idx.column());
         QVariant v = cell.cachedValue.isValid() ? cell.cachedValue : cell.rawValue;
         if (v.isValid() && !v.isNull()) {
             count++;
-            bool ok;
-            double d = v.toDouble(&ok);
-            if (ok) { sum += d; numCount++; }
+            bool ok; double d = v.toDouble(&ok);
+            if (ok) { sum+=d; numCount++; }
         }
     }
 
-    QString stats;
-    if (numCount > 1) {
-        stats = QString("Average: %1   Count: %2   Sum: %3")
-            .arg(numCount > 0 ? sum/numCount : 0, 0, 'g', 6)
-            .arg(count)
-            .arg(sum, 0, 'g', 10);
-    } else if (count == 1) {
-        Cell cell = m_core->getCell(s,
-            selected.first().row(), selected.first().column());
-        stats = cell.cachedValue.isValid()
-            ? cell.cachedValue.toString() : cell.rawValue.toString();
+    if (m_statusStats) {
+        if (numCount > 1) {
+            m_statusStats->setText(QString("Average: %1   Count: %2   Sum: %3")
+                .arg(sum/numCount, 0,'g',6)
+                .arg(count)
+                .arg(sum, 0,'g',10));
+        } else if (count == 1) {
+            Cell c = m_core->getCell(s,sel.first().row(),sel.first().column());
+            m_statusStats->setText((c.cachedValue.isValid() ? c.cachedValue : c.rawValue).toString());
+        } else {
+            m_statusStats->clear();
+        }
     }
-    m_statusStats->setText(stats);
 }
 
-// ── Zoom ──────────────────────────────────────────────────────────────────────
-void MainWindow::onZoomChanged(int value) {
-    setZoom(value);
-}
+// ═══════════════════════════════════════════════════════════════════════════════
+//  ZOOM
+// ═══════════════════════════════════════════════════════════════════════════════
+void MainWindow::onZoomChanged(int v) { setZoom(v); }
 
 void MainWindow::setZoom(int percent) {
-    m_zoomPercent = qBound(50, percent, 200);
+    m_zoomPercent = qBound(50,percent,200);
     m_zoomSlider->blockSignals(true);
     m_zoomSlider->setValue(m_zoomPercent);
     m_zoomSlider->blockSignals(false);
-    m_zoomLabel->setText(QString::number(m_zoomPercent) + "%");
-
-    // Scale the view font
-    qreal scale = m_zoomPercent / 100.0;
-    m_view->setZoomFactor(scale);
+    m_zoomLabel->setText(QString::number(m_zoomPercent)+"%");
+    m_view->setZoomFactor(m_zoomPercent/100.0);
 }
 
-// ── Sheet Management ──────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  SHEET MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════════
 void MainWindow::rebuildSheetTabs() {
     QSignalBlocker b(m_sheetBar);
-    while (m_sheetBar->count() > 0) m_sheetBar->removeTab(0);
+    while (m_sheetBar->count()>0) m_sheetBar->removeTab(0);
     for (SheetId s : m_core->sheets())
         m_sheetBar->addTab(m_core->sheetName(s));
 }
 
 void MainWindow::switchSheet(int idx) {
     auto sheets = m_core->sheets();
-    if (idx >= 0 && idx < sheets.size()) {
-        m_view->switchSheet(sheets[idx]);
-        updateSelectionStats();
-    }
+    if (idx>=0 && idx<sheets.size()) m_view->switchSheet(sheets[idx]);
+    updateSelectionStats();
 }
 
 void MainWindow::addSheet() {
     bool ok;
-    QString name = QInputDialog::getText(this, "New Sheet", "Sheet name:",
-        QLineEdit::Normal, QString("Sheet%1").arg(m_core->sheets().size()+1), &ok);
-    if (!ok || name.isEmpty()) return;
+    QString name = QInputDialog::getText(this,"Insert Sheet","Sheet name:",
+        QLineEdit::Normal,QString("Sheet%1").arg(m_core->sheets().size()+1),&ok);
+    if (!ok||name.isEmpty()) return;
     SheetId s = m_core->addSheet(name);
     m_sheetBar->addTab(m_core->sheetName(s));
     m_sheetBar->setCurrentIndex(m_sheetBar->count()-1);
@@ -659,12 +704,10 @@ void MainWindow::addSheet() {
 
 void MainWindow::removeSheet() {
     auto sheets = m_core->sheets();
-    if (sheets.size() <= 1) {
-        QMessageBox::warning(this, "Remove Sheet", "Cannot remove the last sheet."); return;
-    }
+    if (sheets.size()<=1) { QMessageBox::warning(this,"Delete Sheet","Cannot delete the only sheet."); return; }
     int idx = m_sheetBar->currentIndex();
-    if (idx < 0 || idx >= sheets.size()) return;
-    if (QMessageBox::question(this, "Remove Sheet",
+    if (idx<0||idx>=sheets.size()) return;
+    if (QMessageBox::question(this,"Delete Sheet",
             QString("Delete \"%1\"?").arg(m_core->sheetName(sheets[idx])),
             QMessageBox::Yes|QMessageBox::No) != QMessageBox::Yes) return;
     m_core->removeSheet(sheets[idx]);
@@ -675,33 +718,32 @@ void MainWindow::removeSheet() {
 
 void MainWindow::renameSheet(int idx) {
     auto sheets = m_core->sheets();
-    if (idx < 0 || idx >= sheets.size()) return;
+    if (idx<0||idx>=sheets.size()) return;
     bool ok;
-    QString name = QInputDialog::getText(this, "Rename Sheet", "New name:",
-        QLineEdit::Normal, m_core->sheetName(sheets[idx]), &ok);
-    if (ok && !name.isEmpty()) {
-        m_core->renameSheet(sheets[idx], name);
-        m_sheetBar->setTabText(idx, name);
+    QString name = QInputDialog::getText(this,"Rename Sheet","New name:",
+        QLineEdit::Normal,m_core->sheetName(sheets[idx]),&ok);
+    if (ok&&!name.isEmpty()) {
+        m_core->renameSheet(sheets[idx],name);
+        m_sheetBar->setTabText(idx,name);
         setModified(true);
     }
 }
 
-// ── File operations ───────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  FILE OPERATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
 void MainWindow::newFile() {
     if (!confirmSave()) return;
-    delete m_core;
-    m_core = createSpreadsheetCore();
-    m_filePath.clear();
-    setModified(false);
+    delete m_core; m_core = createSpreadsheetCore();
+    m_filePath.clear(); setModified(false);
     m_view->switchSheet(m_core->sheets().first());
-    rebuildSheetTabs();
-    updateTitle();
-    m_statusReady->setText("Ready");
+    rebuildSheetTabs(); updateTitle();
+    if (m_statusReady) m_statusReady->setText("Ready");
 }
 
 void MainWindow::openFile() {
     if (!confirmSave()) return;
-    QString path = QFileDialog::getOpenFileName(this, "Open File", {},
+    QString path = QFileDialog::getOpenFileName(this,"Open File",{},
         "Spreadsheet Files (*.csv *.xlsx);;CSV Files (*.csv);;Excel Files (*.xlsx);;All Files (*)");
     if (path.isEmpty()) return;
     loadFileAsync(path);
@@ -709,92 +751,68 @@ void MainWindow::openFile() {
 
 void MainWindow::loadFileAsync(const QString& path) {
     m_filePath = path;
-    m_progress->setVisible(true);
-    m_progress->setRange(0, 100);
-    m_statusReady->setText("Loading " + QFileInfo(path).fileName() + "...");
+    if (m_progress) { m_progress->setVisible(true); m_progress->setRange(0,100); }
+    if (m_statusReady) m_statusReady->setText("Loading "+QFileInfo(path).fileName()+"...");
 
-    auto unused_future = QtConcurrent::run([this, path]() {
-        m_loader->loadChunk(path, m_core, m_core->sheets().first(), 0, INT_MAX,
-            [this](qint64 read, qint64 total) {
-                if (total > 0)
-                    QMetaObject::invokeMethod(m_progress, "setValue",
-                        Qt::QueuedConnection,
-                        Q_ARG(int, (int)(read * 100 / total)));
+    auto unused_future = QtConcurrent::run([this,path](){
+        m_loader->loadChunk(path,m_core,m_core->sheets().first(),0,INT_MAX,
+            [this](qint64 r,qint64 t){
+                if (t>0) QMetaObject::invokeMethod(m_progress,"setValue",Qt::QueuedConnection,Q_ARG(int,(int)(r*100/t)));
             });
-        QMetaObject::invokeMethod(this, [this, path]() {
-            m_progress->setVisible(false);
-            m_statusReady->setText("Loaded: " + QFileInfo(path).fileName());
+        QMetaObject::invokeMethod(this,[this,path](){
+            if (m_progress) m_progress->setVisible(false);
+            if (m_statusReady) m_statusReady->setText("Loaded: "+QFileInfo(path).fileName());
             m_view->switchSheet(m_core->sheets().first());
-            rebuildSheetTabs();
-            setModified(false);
-            updateTitle();
-        }, Qt::QueuedConnection);
+            rebuildSheetTabs(); setModified(false); updateTitle();
+        },Qt::QueuedConnection);
     });
 }
 
 void MainWindow::saveFile() {
     if (m_filePath.isEmpty()) { saveFileAs(); return; }
-    m_loader->save(m_filePath, m_core, currentSheet(), nullptr);
+    m_loader->save(m_filePath,m_core,currentSheet(),nullptr);
     setModified(false);
-    m_statusReady->setText("Saved: " + QFileInfo(m_filePath).fileName());
+    if (m_statusReady) m_statusReady->setText("Saved: "+QFileInfo(m_filePath).fileName());
 }
 
 void MainWindow::saveFileAs() {
-    QString path = QFileDialog::getSaveFileName(this, "Save As", m_filePath,
+    QString path = QFileDialog::getSaveFileName(this,"Save As",m_filePath,
         "CSV Files (*.csv);;Excel Files (*.xlsx)");
     if (path.isEmpty()) return;
-    m_filePath = path;
-    saveFile();
+    m_filePath = path; saveFile();
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
 SheetId MainWindow::currentSheet() const {
     auto sheets = m_core->sheets();
     int idx = m_sheetBar->currentIndex();
-    return (idx >= 0 && idx < sheets.size()) ? sheets[idx] : sheets.first();
+    return (idx>=0&&idx<sheets.size()) ? sheets[idx] : sheets.first();
 }
-
-void MainWindow::setModified(bool m) {
-    m_modified = m;
-    updateTitle();
-}
-
+void MainWindow::setModified(bool m) { m_modified=m; updateTitle(); }
 bool MainWindow::confirmSave() {
     if (!m_modified) return true;
-    auto btn = QMessageBox::question(this, "Unsaved Changes",
-        "Save changes before continuing?",
-        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
-    if (btn == QMessageBox::Save)    { saveFile(); return true; }
-    if (btn == QMessageBox::Discard) return true;
+    auto btn = QMessageBox::question(this,"Unsaved Changes","Save changes?",
+        QMessageBox::Save|QMessageBox::Discard|QMessageBox::Cancel);
+    if (btn==QMessageBox::Save)    { saveFile(); return true; }
+    if (btn==QMessageBox::Discard) return true;
     return false;
 }
-
 void MainWindow::updateTitle() {
     QString name = m_filePath.isEmpty() ? "Untitled" : QFileInfo(m_filePath).fileName();
-    setWindowTitle((m_modified ? "* " : "") + name + " — OpenSheet");
+    setWindowTitle((m_modified?"* ":"")+name+" — OpenSheet");
 }
-
-void MainWindow::onFormatChanged(const CellFormat& fmt, const QString& ref) {
-    onSelectionChanged(fmt, ref);
-}
-
 void MainWindow::closeEvent(QCloseEvent* e) {
-    if (confirmSave()) e->accept();
-    else e->ignore();
+    if (confirmSave()) e->accept(); else e->ignore();
 }
-
-void MainWindow::resizeEvent(QResizeEvent* e) {
-    QMainWindow::resizeEvent(e);
-}
+void MainWindow::resizeEvent(QResizeEvent* e) { QMainWindow::resizeEvent(e); }
 
 QToolButton* MainWindow::makeQATButton(const QString& text, const QString& tip,
-                                        const std::function<void()>& fn)
-{
+                                        const std::function<void()>& fn) {
     auto* btn = new QToolButton;
-    btn->setText(text);
-    btn->setToolTip(tip);
-    btn->setFixedSize(24, 24);
-    btn->setAutoRaise(true);
-    connect(btn, &QToolButton::clicked, this, fn);
+    btn->setText(text); btn->setToolTip(tip);
+    btn->setFixedSize(24,24); btn->setAutoRaise(true);
+    connect(btn,&QToolButton::clicked,this,fn);
     return btn;
 }

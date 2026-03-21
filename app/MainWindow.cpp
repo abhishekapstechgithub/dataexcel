@@ -530,7 +530,7 @@ void MainWindow::connectView() {
             this,   &MainWindow::onSelectionChanged);
 
     // Selection → status bar stats
-    connect(m_view->selectionModel(), &QItemSelectionModel::selectionChanged,
+    connect(m_view->publicSelectionModel(), &QItemSelectionModel::selectionChanged,
             this, [this]{ updateSelectionStats(); });
 }
 
@@ -582,7 +582,7 @@ void MainWindow::onFormulaBarReturn() {
 
 // ── Update Selection Stats ─────────────────────────────────────────────────────
 void MainWindow::updateSelectionStats() {
-    auto selected = m_view->selectedIndexes();
+    auto selected = m_view->publicSelectedIndexes();
     if (selected.isEmpty()) { m_statusStats->clear(); return; }
 
     double sum = 0; int count = 0; int numCount = 0;

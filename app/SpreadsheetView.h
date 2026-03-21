@@ -51,6 +51,10 @@ public:
     void autoSum();
     void mergeSelected();
 
+    // Public wrappers for protected QTableView members
+    QModelIndexList publicSelectedIndexes() const { return selectedIndexes(); }
+    QItemSelectionModel* publicSelectionModel() const { return selectionModel(); }
+
 signals:
     void selectionFormatChanged(const CellFormat& fmt, const QString& cellRef);
 

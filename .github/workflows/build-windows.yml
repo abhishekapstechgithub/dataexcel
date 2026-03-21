@@ -30,40 +30,18 @@ jobs:
       run: |
         cmake -B build `
           -DCMAKE_BUILD_TYPE=Release `
-          -DCMAKE_PREFIX_PATH="${{ env.Qt6_DIR }}" `
-          -DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE="${{ github.workspace }}\build\bin"
+          -DCMAKE_PREFIX_PATH="${{ env.Qt6_DIR }}"
 
     - name: Build
       run: cmake --build build --config Release --parallel
-
-    - name: Show build output (debug)
-      shell: cmd
-      run: |
-        echo === build\bin contents ===
-        dir build\bin /s /b 2>nul || echo "(empty)"
-        echo === build\bin\Release contents ===
-        dir build\bin\Release /s /b 2>nul || echo "(empty)"
 
     - name: Deploy Qt DLLs
       shell: cmd
       run: |
         mkdir deploy
-
-        :: MSVC puts outputs in build\bin\Release\ — copy exe and all DLLs from there
-        if exist "build\bin\Release\QtSpreadsheet.exe" (
-          copy "build\bin\Release\QtSpreadsheet.exe" deploy\
-          for %%f in (build\bin\Release\*.dll) do copy "%%f" deploy\
-        ) else if exist "build\bin\QtSpreadsheet.exe" (
-          copy "build\bin\QtSpreadsheet.exe" deploy\
-          for %%f in (build\bin\*.dll) do copy "%%f" deploy\
-        ) else (
-          echo ERROR: Cannot find QtSpreadsheet.exe
-          dir build /s /b
-          exit /b 1
-        )
-
-        :: Run windeployqt to pull in all Qt DLLs + plugins
-        windeployqt --release --no-translations --no-system-d3d-compiler "deploy\QtSpreadsheet.exe"
+        copy build\bin\QtSpreadsheet.exe deploy\
+        for %%f in (build\bin\*.dll) do copy "%%f" deploy\
+        windeployqt --release --no-translations --no-system-d3d-compiler deploy\QtSpreadsheet.exe
 
     - name: Install NSIS
       run: choco install nsis --no-progress -y
@@ -74,9 +52,6 @@ jobs:
         copy installer\QtSpreadsheet.nsi deploy\QtSpreadsheet.nsi
         cd deploy
         makensis QtSpreadsheet.nsi
-        if errorlevel 1 exit /b 1
-        echo === Installer built ===
-        dir QtSpreadsheet-Setup.exe
 
     - name: Upload installer
       uses: actions/upload-artifact@v4

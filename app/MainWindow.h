@@ -63,6 +63,7 @@ private:
     QLabel*       m_statusMode  { nullptr };
     QLabel*       m_statusStats { nullptr };
     QProgressBar* m_progress    { nullptr };
+    QWidget*      m_notifBar   { nullptr };
 
     // Zoom
     QSlider* m_zoomSlider  { nullptr };
@@ -77,6 +78,7 @@ private:
     // Builders (return widget for layout insertion)
     void     buildMenuBar();
     QWidget* buildFormulaBar();
+    QWidget* buildNotifBar();
     QWidget* buildSheetBar();
     void     buildStatusBar();
 

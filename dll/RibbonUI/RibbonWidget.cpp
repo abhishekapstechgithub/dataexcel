@@ -1,3 +1,9 @@
+// ═══════════════════════════════════════════════════════════════════════════════
+//  RibbonWidget.cpp — Full WPS-style ribbon with all Home tab groups
+//  Groups: Clipboard | Font | Alignment | Number Format | Styles | Cells | Editing
+//  + Format Conversion | Conditional Formatting | Cell Styles | Table Styles
+//  + Sheets | Fill | AutoSum | Sort | Filter | Freeze Panes | Find
+// ═══════════════════════════════════════════════════════════════════════════════
 #include "RibbonWidget.h"
 #include "ColorButton.h"
 #include <QTabWidget>
@@ -19,382 +25,334 @@
 #include <functional>
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  ICON FACTORY — all icons drawn with pure QPainter, zero dependencies
+//  ICON FACTORY
 // ═══════════════════════════════════════════════════════════════════════════════
 static QIcon makeIcon(std::function<void(QPainter&, int)> draw, int sz = 20) {
-    QPixmap pm(sz, sz);
-    pm.fill(Qt::transparent);
-    QPainter p(&pm);
-    p.setRenderHint(QPainter::Antialiasing);
-    draw(p, sz);
+    QPixmap pm(sz, sz); pm.fill(Qt::transparent);
+    QPainter p(&pm); p.setRenderHint(QPainter::Antialiasing); draw(p, sz);
     return QIcon(pm);
 }
-
-static QPen darkPen(qreal w = 1.6) {
-    return QPen(QColor("#404040"), w, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-}
-static QPen greenPen(qreal w = 1.8) {
-    return QPen(QColor("#1e7145"), w, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-}
+static QPen darkPen(qreal w=1.6){ return QPen(QColor("#404040"),w,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin); }
+static QPen greenPen(qreal w=1.8){ return QPen(QColor("#1e7145"),w,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin); }
+static QPen redPen(qreal w=1.6){ return QPen(QColor("#c0392b"),w,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin); }
 
 namespace Ic {
-
-static QIcon paste() { return makeIcon([](QPainter& p, int){ 
-    p.setPen(darkPen()); p.setBrush(QColor("#f0f0f0"));
-    p.drawRoundedRect(3,5,14,13,1,1);
-    p.setBrush(Qt::white); p.drawRoundedRect(6,2,8,5,1,1);
-    p.setPen(darkPen(1.2)); p.drawLine(6,10,14,10); p.drawLine(6,13,14,13);
-}); }
-
-static QIcon cut() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.5));
-    p.drawEllipse(2,13,5,5); p.drawEllipse(13,13,5,5);
-    p.drawLine(4,13,10,7); p.drawLine(16,13,10,7);
-    p.drawLine(4,3,10,7);  p.drawLine(16,3,10,7);
-}); }
-
-static QIcon copy() { return makeIcon([](QPainter& p, int){
+static QIcon paste(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen()); p.setBrush(QColor("#e8e8e8"));
+    p.drawRoundedRect(2,5,14,13,1,1);
+    p.setBrush(Qt::white); p.setPen(greenPen(1.5));
+    p.drawRoundedRect(5,2,10,6,1,1);
+    p.setPen(darkPen(1.1)); p.drawLine(5,10,13,10); p.drawLine(5,13,13,13);
+});}
+static QIcon cut(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen(1.6));
+    p.drawEllipse(2,12,5,5); p.drawEllipse(13,12,5,5);
+    p.drawLine(4,12,10,6); p.drawLine(16,12,10,6);
+    p.drawLine(4,2,10,6); p.drawLine(16,2,10,6);
+});}
+static QIcon copy(){return makeIcon([](QPainter&p,int){
     p.setPen(darkPen()); p.setBrush(QColor("#e8e8e8"));
     p.drawRoundedRect(6,6,12,12,1,1);
     p.setBrush(Qt::white); p.drawRoundedRect(2,2,12,12,1,1);
-    p.setBrush(Qt::NoBrush); p.drawRoundedRect(2,2,12,12,1,1);
-}); }
-
-static QIcon fmtpaint() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.5));
-    p.setBrush(QColor("#f5c518")); p.drawRoundedRect(2,2,10,8,1,1);
-    p.setBrush(Qt::NoBrush);
-    p.setPen(greenPen(2)); p.drawLine(12,6,18,12); p.drawLine(12,12,18,6);
-}); }
-
-static QIcon bold() { return makeIcon([](QPainter& p, int s){
-    QFont f("Arial",13,QFont::Black); p.setFont(f); p.setPen(QColor("#222"));
-    p.drawText(QRect(0,0,s,s),Qt::AlignCenter,"B");
-}); }
-
-static QIcon italic() { return makeIcon([](QPainter& p, int s){
-    QFont f("Times New Roman",13,QFont::Normal,true); p.setFont(f);
-    p.setPen(QColor("#222")); p.drawText(QRect(0,0,s,s),Qt::AlignCenter,"I");
-}); }
-
-static QIcon underline() { return makeIcon([](QPainter& p, int s){
-    QFont f("Arial",12,QFont::Bold); p.setFont(f); p.setPen(QColor("#222"));
-    p.drawText(QRect(0,-2,s,s),Qt::AlignCenter,"U");
-    p.setPen(QPen(QColor("#222"),2.5,Qt::SolidLine,Qt::RoundCap));
-    p.drawLine(3,18,17,18);
-}); }
-
-static QIcon fontcolor() { return makeIcon([](QPainter& p, int s){
-    QFont f("Arial",11,QFont::Bold); p.setFont(f); p.setPen(QColor("#222"));
-    p.drawText(QRect(0,-2,s,s),Qt::AlignCenter,"A");
-    p.setBrush(QColor("#e84040")); p.setPen(Qt::NoPen); p.drawRect(2,16,16,3);
-}); }
-
-static QIcon fillcolor() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.5)); p.setBrush(QColor("#444"));
-    QPolygon poly; poly<<QPoint(5,13)<<QPoint(10,3)<<QPoint(15,13)<<QPoint(12,13)<<QPoint(12,15)<<QPoint(8,15)<<QPoint(8,13);
-    p.drawPolygon(poly);
-    p.setBrush(QColor("#f5c518")); p.setPen(Qt::NoPen); p.drawRect(2,16,16,3);
-}); }
-
-static QIcon borders() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.5));
-    p.drawRect(3,3,14,14);
-    p.setPen(darkPen(0.8));
-    p.drawLine(3,10,17,10); p.drawLine(10,3,10,17);
-}); }
-
-static QIcon alignL() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.8));
-    p.drawLine(2,5,18,5); p.drawLine(2,9,13,9);
-    p.drawLine(2,13,18,13); p.drawLine(2,17,13,17);
-}); }
-
-static QIcon alignC() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.8));
-    p.drawLine(2,5,18,5); p.drawLine(5,9,15,9);
-    p.drawLine(2,13,18,13); p.drawLine(5,17,15,17);
-}); }
-
-static QIcon alignR() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.8));
-    p.drawLine(2,5,18,5); p.drawLine(7,9,18,9);
-    p.drawLine(2,13,18,13); p.drawLine(7,17,18,17);
-}); }
-
-static QIcon vTop() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.8)); p.drawLine(2,3,18,3);
-    p.drawLine(7,5,7,17); p.drawLine(13,5,13,17); p.drawLine(7,11,13,11);
-}); }
-
-static QIcon vMid() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.8)); p.drawLine(2,10,18,10);
-    p.drawLine(7,3,7,17); p.drawLine(13,3,13,17);
-}); }
-
-static QIcon vBot() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.8)); p.drawLine(2,17,18,17);
-    p.drawLine(7,3,7,15); p.drawLine(13,3,13,15); p.drawLine(7,9,13,9);
-}); }
-
-static QIcon wrap() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.5));
-    p.drawLine(2,5,18,5); p.drawLine(2,10,13,10);
-    p.drawArc(10,7,8,8,0,180*16);
-    p.drawLine(2,15,10,15);
-    QPolygon arr; arr<<QPoint(5,11)<<QPoint(2,14)<<QPoint(5,17);
-    p.drawPolyline(arr);
-}); }
-
-static QIcon merge() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.5));
-    p.drawRect(2,2,16,16); p.drawLine(2,10,18,10); p.drawLine(10,2,10,10);
-    p.setPen(greenPen(2));
-    QPolygon a; a<<QPoint(4,14)<<QPoint(7,12)<<QPoint(7,16); p.drawPolygon(a);
-    QPolygon b; b<<QPoint(16,14)<<QPoint(13,12)<<QPoint(13,16); p.drawPolygon(b);
-    p.drawLine(5,14,15,14);
-}); }
-
-static QIcon orientation() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.5));
-    p.save(); p.translate(10,10); p.rotate(-45);
-    p.drawLine(-7,0,7,0);
-    QPolygon arr; arr<<QPoint(5,-2)<<QPoint(7,0)<<QPoint(5,2); p.drawPolygon(arr);
-    p.restore();
-    p.drawLine(2,16,18,16);
-}); }
-
-static QIcon currency() { return makeIcon([](QPainter& p, int s){
-    QFont f("Arial",12); p.setFont(f); p.setPen(QColor("#444"));
-    p.drawText(QRect(0,0,s,s),Qt::AlignCenter,"$");
-}); }
-
-static QIcon percent() { return makeIcon([](QPainter& p, int s){
-    QFont f("Arial",11); p.setFont(f); p.setPen(QColor("#444"));
-    p.drawText(QRect(0,0,s,s),Qt::AlignCenter,"%");
-}); }
-
-static QIcon thousands() { return makeIcon([](QPainter& p, int s){
-    QFont f("Arial",9); p.setFont(f); p.setPen(QColor("#444"));
-    p.drawText(QRect(0,0,s,s),Qt::AlignCenter,"000");
-}); }
-
-static QIcon decInc() { return makeIcon([](QPainter& p, int s){
-    QFont f("Arial",9); p.setFont(f); p.setPen(QColor("#444"));
-    p.drawText(1,14,".0"); p.setPen(greenPen(1.5));
-    p.drawText(12,10,"+");
-}); }
-
-static QIcon decDec() { return makeIcon([](QPainter& p, int s){
-    QFont f("Arial",9); p.setFont(f); p.setPen(QColor("#444"));
-    p.drawText(1,14,".0"); p.setPen(QPen(QColor("#c0392b"),1.5));
-    p.drawText(12,10,"-");
-}); }
-
-static QIcon condFmt() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen()); p.setBrush(QColor("#fff3cd"));
-    p.drawRoundedRect(2,2,16,16,2,2);
-    p.setPen(QPen(QColor("#f59e0b"),2)); p.drawLine(10,5,10,12); p.drawLine(10,14,10,15);
-}); }
-
-static QIcon tableStyle() { return makeIcon([](QPainter& p, int){
+});}
+static QIcon fmtpaint(){return makeIcon([](QPainter&p,int){
+    p.setPen(greenPen(2)); p.setBrush(QColor("#1e7145"));
+    p.drawRoundedRect(1,1,10,12,1,1);
+    p.setPen(darkPen(1.5)); p.setBrush(Qt::NoBrush);
+    p.drawLine(11,12,17,18); p.drawLine(14,9,17,6);
+});}
+static QIcon bold(){return makeIcon([](QPainter&p,int s){
+    QFont f("Segoe UI",s*0.65,QFont::Bold); p.setFont(f); p.setPen(QColor("#333"));
+    p.drawText(QRect(1,0,s,s),Qt::AlignCenter,"B");
+});}
+static QIcon italic(){return makeIcon([](QPainter&p,int s){
+    QFont f("Segoe UI",s*0.65,QFont::Normal,true); p.setFont(f); p.setPen(QColor("#333"));
+    p.drawText(QRect(1,0,s,s),Qt::AlignCenter,"I");
+});}
+static QIcon underline(){return makeIcon([](QPainter&p,int s){
+    QFont f("Segoe UI",s*0.55,QFont::Bold); p.setFont(f); p.setPen(QColor("#333"));
+    p.drawText(QRect(1,-2,s,s),Qt::AlignCenter,"U");
+    p.setPen(QPen(QColor("#1e7145"),2)); p.drawLine(2,s-2,s-2,s-2);
+});}
+static QIcon borders(){return makeIcon([](QPainter&p,int){
     p.setPen(darkPen(1.2));
-    for(int i=0;i<3;i++) for(int j=0;j<3;j++){
-        QColor c = (i==0||j==0) ? QColor("#1e7145") : (i+j)%2==0 ? QColor("#d1e8d8") : Qt::white;
-        p.setBrush(c); p.setPen(Qt::NoPen);
-        p.drawRect(2+i*6,2+j*6,5,5);
-    }
-    p.setPen(darkPen(0.8)); p.drawRect(2,2,16,16);
-}); }
-
-static QIcon rowsAndCols() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.5));
-    p.drawRect(2,2,16,6); p.drawRect(2,10,16,8);
-    p.drawLine(10,2,10,8); p.drawLine(10,10,10,18);
-}); }
-
-static QIcon sheets() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen()); p.setBrush(Qt::white);
-    p.drawRoundedRect(4,4,14,14,2,2);
-    p.setBrush(QColor("#e8f4ed")); p.drawRoundedRect(2,2,14,14,2,2);
-    p.setBrush(Qt::NoBrush); p.drawRoundedRect(2,2,14,14,2,2);
-    p.setPen(darkPen(0.8)); p.drawLine(6,6,12,6); p.drawLine(6,9,12,9);
-}); }
-
-static QIcon insRow() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen()); p.drawRoundedRect(2,2,16,6,1,1);
-    p.drawRoundedRect(2,12,16,6,1,1);
-    p.setPen(greenPen(2)); p.drawLine(10,10,10,20); p.drawLine(7,15,13,15);
-}); }
-
-static QIcon delRow() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen()); p.drawRoundedRect(2,2,16,6,1,1);
-    p.drawRoundedRect(2,12,16,6,1,1);
-    p.setPen(QPen(QColor("#c0392b"),2,Qt::SolidLine,Qt::RoundCap)); p.drawLine(7,15,13,15);
-}); }
-
-static QIcon fmtCell() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.5)); p.drawRoundedRect(2,2,16,16,2,2);
-    p.drawLine(2,8,18,8); p.drawLine(8,2,8,8);
-}); }
-
-static QIcon autosum() { return makeIcon([](QPainter& p, int s){
-    QFont f("Times New Roman",15); p.setFont(f); p.setPen(QColor("#1e7145"));
-    p.drawText(QRect(0,0,s,s),Qt::AlignCenter,"\u03A3");
-}); }
-
-static QIcon fill() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.5)); p.setBrush(QColor("#1e7145"));
-    QPolygon poly; poly<<QPoint(4,3)<<QPoint(16,3)<<QPoint(16,15)<<QPoint(10,18)<<QPoint(4,15);
-    p.drawPolygon(poly);
-    p.setBrush(Qt::white); p.setPen(Qt::NoPen);
-    p.drawRect(6,5,8,8);
-}); }
-
-static QIcon sortAsc() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.8));
-    p.drawLine(2,5,10,5); p.drawLine(2,10,14,10); p.drawLine(2,15,18,15);
-    p.setPen(greenPen(2)); p.drawLine(17,3,17,11);
-    QPolygon arr; arr<<QPoint(14,7)<<QPoint(17,4)<<QPoint(20,7); p.drawPolyline(arr);
-}); }
-
-static QIcon sortDesc() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.8));
-    p.drawLine(2,5,18,5); p.drawLine(2,10,14,10); p.drawLine(2,15,10,15);
-    p.setPen(greenPen(2)); p.drawLine(17,4,17,12);
-    QPolygon arr; arr<<QPoint(14,9)<<QPoint(17,12)<<QPoint(20,9); p.drawPolyline(arr);
-}); }
-
-static QIcon filter() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.8));
-    QPolygon poly; poly<<QPoint(2,3)<<QPoint(18,3)<<QPoint(12,10)<<QPoint(12,17)<<QPoint(8,17)<<QPoint(8,10)<<QPoint(2,3);
-    p.drawPolyline(poly);
-}); }
-
-static QIcon findIcon() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen(1.8)); p.drawEllipse(2,2,12,12);
-    p.setPen(QPen(QColor("#444"),2.5,Qt::SolidLine,Qt::RoundCap)); p.drawLine(12,12,18,18);
-}); }
-
-static QIcon freezePanes() { return makeIcon([](QPainter& p, int){
-    p.setPen(darkPen());
     p.drawRect(2,2,16,16);
-    p.setPen(QPen(QColor("#1e7145"),2,Qt::SolidLine,Qt::RoundCap));
-    p.drawLine(2,8,18,8); p.drawLine(9,2,9,18);
-}); }
-
-// Dropdown arrow (small, for split buttons)
-static QIcon dropArrow() { return makeIcon([](QPainter& p, int s){
-    p.setPen(QPen(QColor("#555"),1.5,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));
-    p.setBrush(QColor("#555"));
-    QPolygon arr; arr<<QPoint(s/2-3,s/2-1)<<QPoint(s/2+3,s/2-1)<<QPoint(s/2,s/2+2);
-    p.drawPolygon(arr);
-}, 10); }
-
+    p.drawLine(10,2,10,18); p.drawLine(2,10,18,10);
+});}
+static QIcon alignL(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen(1.5));
+    p.drawLine(2,5,18,5); p.drawLine(2,9,14,9); p.drawLine(2,13,18,13); p.drawLine(2,17,14,17);
+});}
+static QIcon alignC(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen(1.5));
+    p.drawLine(2,5,18,5); p.drawLine(5,9,15,9); p.drawLine(2,13,18,13); p.drawLine(5,17,15,17);
+});}
+static QIcon alignR(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen(1.5));
+    p.drawLine(2,5,18,5); p.drawLine(6,9,18,9); p.drawLine(2,13,18,13); p.drawLine(6,17,18,17);
+});}
+static QIcon vTop(){return makeIcon([](QPainter&p,int){
+    p.setPen(greenPen(2)); p.drawLine(2,2,18,2);
+    p.setPen(darkPen(1.5)); p.drawLine(6,4,10,14); p.drawLine(14,4,10,14);
+    p.drawLine(6,4,14,4);
+});}
+static QIcon vMid(){return makeIcon([](QPainter&p,int){
+    p.setPen(greenPen(2)); p.drawLine(2,10,18,10);
+    p.setPen(darkPen(1.5)); p.drawLine(5,3,5,17); p.drawLine(15,3,15,17);
+    p.drawLine(5,3,15,3); p.drawLine(5,17,15,17);
+});}
+static QIcon vBot(){return makeIcon([](QPainter&p,int){
+    p.setPen(greenPen(2)); p.drawLine(2,18,18,18);
+    p.setPen(darkPen(1.5)); p.drawLine(6,16,10,6); p.drawLine(14,16,10,6);
+    p.drawLine(6,16,14,16);
+});}
+static QIcon wrap(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen(1.4));
+    p.drawLine(2,5,16,5); p.drawLine(2,9,18,9);
+    QPainterPath path; path.moveTo(18,9); path.cubicTo(20,9,20,14,18,14);
+    path.lineTo(14,14); p.drawPath(path);
+    p.setBrush(QColor("#404040")); p.setPen(Qt::NoPen);
+    QPolygon arr; arr<<QPoint(14,11)<<QPoint(14,17)<<QPoint(10,14); p.drawPolygon(arr);
+    p.setPen(darkPen(1.4)); p.drawLine(2,13,10,13);
+});}
+static QIcon merge(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen()); p.setBrush(Qt::NoBrush);
+    p.drawRect(2,2,7,7); p.drawRect(11,2,7,7); p.drawRect(2,11,7,7); p.drawRect(11,11,7,7);
+    p.setPen(greenPen(2));
+    p.drawLine(10,2,10,18); p.drawLine(2,10,18,10);
+});}
+static QIcon orientation(){return makeIcon([](QPainter&p,int){
+    p.setPen(greenPen(1.8));
+    p.save(); p.translate(10,10); p.rotate(-45); p.drawLine(-7,0,7,0);
+    QPolygon a; a<<QPoint(4,-3)<<QPoint(7,0)<<QPoint(4,3); p.setPen(Qt::NoPen);
+    p.setBrush(QColor("#1e7145")); p.drawPolygon(a); p.restore();
+    p.setPen(darkPen(1.3)); p.drawLine(2,17,18,17);
+});}
+static QIcon currency(){return makeIcon([](QPainter&p,int s){
+    QFont f("Segoe UI",s*0.7,QFont::Bold); p.setFont(f); p.setPen(QColor("#1e7145"));
+    p.drawText(QRect(0,0,s,s),Qt::AlignCenter,"$");
+});}
+static QIcon percent(){return makeIcon([](QPainter&p,int s){
+    QFont f("Segoe UI",s*0.65,QFont::Bold); p.setFont(f); p.setPen(QColor("#333"));
+    p.drawText(QRect(0,0,s,s),Qt::AlignCenter,"%");
+});}
+static QIcon thousands(){return makeIcon([](QPainter&p,int s){
+    QFont f("Segoe UI",s*0.5); p.setFont(f); p.setPen(QColor("#333"));
+    p.drawText(QRect(0,0,s,s),Qt::AlignCenter,"000");
+});}
+static QIcon decInc(){return makeIcon([](QPainter&p,int s){
+    QFont f("Segoe UI",s*0.45); p.setFont(f); p.setPen(QColor("#1e7145"));
+    p.drawText(QRect(0,0,s/2+2,s),Qt::AlignVCenter|Qt::AlignRight,".0");
+    p.setPen(QColor("#333")); p.drawText(QRect(s/2,0,s/2,s),Qt::AlignVCenter|Qt::AlignLeft,"0>");
+});}
+static QIcon decDec(){return makeIcon([](QPainter&p,int s){
+    QFont f("Segoe UI",s*0.45); p.setFont(f); p.setPen(QColor("#c0392b"));
+    p.drawText(QRect(0,0,s/2+4,s),Qt::AlignVCenter|Qt::AlignRight,"<0");
+    p.setPen(QColor("#333")); p.drawText(QRect(s/2+2,0,s/2,s),Qt::AlignVCenter|Qt::AlignLeft,".0");
+});}
+static QIcon condFmt(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen(1.2));
+    p.setBrush(QColor("#ffe8e8")); p.drawRoundedRect(2,2,16,7,1,1);
+    p.setBrush(QColor("#e8ffe8")); p.drawRoundedRect(2,11,16,7,1,1);
+    p.setPen(redPen(1.5)); p.drawLine(5,5,8,5); p.drawLine(10,5,15,5);
+    p.setPen(greenPen(1.5)); p.drawLine(5,14,15,14);
+});}
+static QIcon fmtConvert(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen()); p.setBrush(QColor("#e8f5ee"));
+    p.drawRoundedRect(1,1,12,16,2,2);
+    p.setPen(greenPen(2)); p.drawLine(13,9,19,9);
+    p.setBrush(QColor("#1e7145")); p.setPen(Qt::NoPen);
+    QPolygon a; a<<QPoint(16,6)<<QPoint(19,9)<<QPoint(16,12); p.drawPolygon(a);
+});}
+static QIcon tableStyle(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen(1.1));
+    p.setBrush(QColor("#1e7145")); p.drawRect(2,2,16,4);
+    p.setBrush(QColor("#e8f5ee")); p.drawRect(2,6,8,4);
+    p.setBrush(Qt::white);        p.drawRect(10,6,8,4);
+    p.setBrush(QColor("#e8f5ee")); p.drawRect(2,10,8,4);
+    p.setBrush(Qt::white);        p.drawRect(10,10,8,4);
+    p.setBrush(QColor("#e8f5ee")); p.drawRect(2,14,8,4);
+    p.setBrush(Qt::white);        p.drawRect(10,14,8,4);
+});}
+static QIcon cellStyle(){return makeIcon([](QPainter&p,int){
+    p.setPen(greenPen(2)); p.setBrush(Qt::NoBrush);
+    p.drawRoundedRect(2,2,16,16,2,2);
+    p.setPen(darkPen(1.2));
+    p.drawLine(2,8,18,8); p.drawLine(10,2,10,18);
+    p.setBrush(QColor("#c8e6d4")); p.setPen(Qt::NoPen);
+    p.drawRoundedRect(3,3,6,4,1,1);
+});}
+static QIcon rowsAndCols(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen(1.3));
+    p.drawLine(2,6,18,6); p.drawLine(2,10,18,10); p.drawLine(2,14,18,14);
+    p.setPen(greenPen(1.8));
+    p.drawLine(10,2,10,18);
+    p.setBrush(QColor("#1e7145")); p.setPen(Qt::NoPen);
+    QPolygon a; a<<QPoint(7,3)<<QPoint(10,0)<<QPoint(13,3); p.drawPolygon(a);
+    QPolygon b; b<<QPoint(7,17)<<QPoint(10,20)<<QPoint(13,17); p.drawPolygon(b);
+});}
+static QIcon sheets(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen()); p.setBrush(QColor("#e8e8e8"));
+    p.drawRoundedRect(2,6,18,13,1,1);
+    p.setBrush(QColor("#e8f5ee")); p.drawRoundedRect(4,4,8,5,1,1);
+    p.setPen(greenPen(1.5)); p.drawLine(14,3,14,8);
+    p.drawLine(11,6,17,6);
+});}
+static QIcon autosum(){return makeIcon([](QPainter&p,int s){
+    QFont f("Segoe UI",s*0.65,QFont::Bold); p.setFont(f); p.setPen(QColor("#1e7145"));
+    p.drawText(QRect(0,0,s,s),Qt::AlignCenter,"Σ");
+});}
+static QIcon fill(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen()); p.setBrush(QColor("#e8f5ee"));
+    p.drawRoundedRect(2,2,16,16,1,1);
+    p.setPen(greenPen(2));
+    p.drawLine(10,5,10,15); p.drawLine(5,10,15,10);
+});}
+static QIcon sortAsc(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen(1.5));
+    p.drawLine(2,16,8,4); p.drawLine(8,4,14,16);
+    p.drawLine(4,12,12,12);
+    p.setPen(darkPen(1.2));
+    p.drawLine(16,5,18,5); p.drawLine(16,9,18,9); p.drawLine(16,13,18,13);
+});}
+static QIcon sortDesc(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen(1.5));
+    p.drawLine(2,4,8,16); p.drawLine(8,16,14,4);
+    p.drawLine(4,8,12,8);
+    p.setPen(darkPen(1.2));
+    p.drawLine(16,5,18,5); p.drawLine(16,9,18,9); p.drawLine(16,13,18,13);
+});}
+static QIcon filter(){return makeIcon([](QPainter&p,int){
+    p.setPen(greenPen(2)); p.setBrush(Qt::NoBrush);
+    p.drawLine(2,4,18,4); p.drawLine(5,9,15,9); p.drawLine(8,14,12,14);
+    p.setBrush(QColor("#1e7145")); p.setPen(Qt::NoPen);
+    QPolygon a; a<<QPoint(5,18)<<QPoint(8,15)<<QPoint(8,9)<<QPoint(5,9); p.drawPolygon(a);
+});}
+static QIcon findIcon(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen(1.8)); p.setBrush(Qt::NoBrush);
+    p.drawEllipse(2,2,12,12); p.drawLine(11,11,18,18);
+});}
+static QIcon freezePanes(){return makeIcon([](QPainter&p,int){
+    p.setPen(greenPen(2));
+    p.drawLine(2,8,18,8); p.drawLine(10,2,10,18);
+    p.setPen(darkPen(1.1));
+    p.drawRect(2,2,8,6); p.drawRect(2,8,8,10); p.drawRect(10,2,8,6); p.drawRect(10,8,8,10);
+});}
+static QIcon insRow(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen(1.2));
+    p.drawLine(2,6,18,6); p.drawLine(2,14,18,14);
+    p.setPen(greenPen(2));
+    p.drawLine(10,8,10,12); p.drawLine(7,10,13,10);
+});}
+static QIcon delRow(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen(1.2));
+    p.drawLine(2,6,18,6); p.drawLine(2,14,18,14);
+    p.setPen(redPen(2));
+    p.drawLine(7,10,13,10);
+});}
+static QIcon fmtCell(){return makeIcon([](QPainter&p,int){
+    p.setPen(darkPen()); p.setBrush(Qt::white);
+    p.drawRoundedRect(2,2,16,16,2,2);
+    p.setPen(greenPen(1.5));
+    p.drawLine(5,6,15,6); p.drawLine(5,10,15,10); p.drawLine(5,14,11,14);
+});}
 } // namespace Ic
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  BUTTON FACTORIES
+//  HELPER WIDGETS
 // ═══════════════════════════════════════════════════════════════════════════════
+static QFrame* vSep() {
+    auto* f = new QFrame; f->setFrameShape(QFrame::VLine);
+    f->setFixedWidth(1); f->setFixedHeight(80);
+    f->setStyleSheet("color: #e0e0e0;"); return f;
+}
 
-// Large button: icon on top, label below (like WPS Format Painter, Paste)
+// Group label at the bottom of each section
+static QLabel* groupLabel(const QString& text) {
+    auto* lbl = new QLabel(text);
+    lbl->setAlignment(Qt::AlignCenter);
+    lbl->setStyleSheet("color:#888; font-size:10px; font-family:'Segoe UI',Arial;");
+    lbl->setFixedHeight(14);
+    return lbl;
+}
+
+// Large button (Paste / AutoSum / Fill)
 static QToolButton* makeLargeBtn(const QIcon& icon, const QString& label,
-                                  const QString& tip, int w=54, int h=62)
-{
+                                  const QString& tip, int w=52, int h=60) {
     auto* btn = new QToolButton;
-    btn->setIcon(icon);
-    btn->setIconSize(QSize(28,28));
-    btn->setToolTip(tip);
-    btn->setText(label);
-    btn->setFixedSize(w, h);
+    btn->setIcon(icon); btn->setIconSize(QSize(28,28));
+    btn->setText(label); btn->setToolTip(tip);
     btn->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
     btn->setAutoRaise(true);
-    return btn;
-}
-
-// Medium button: icon + text side by side (for Rows/Columns, Sheets etc)
-static QToolButton* makeMedBtn(const QIcon& icon, const QString& label,
-                                const QString& tip, int w=90, int h=30)
-{
-    auto* btn = new QToolButton;
-    btn->setIcon(icon);
-    btn->setIconSize(QSize(18,18));
-    btn->setToolTip(tip);
-    btn->setText("  "+label);
     btn->setFixedSize(w, h);
-    btn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    btn->setAutoRaise(true);
+    btn->setStyleSheet(
+        "QToolButton { border:1px solid transparent; border-radius:3px; "
+        "  background:transparent; font-size:10px; color:#333; padding:2px; }"
+        "QToolButton:hover { background:#e8f5ee; border-color:#b8d9c4; }"
+        "QToolButton:pressed { background:#c8e6d4; border-color:#1e7145; }"
+    );
     return btn;
 }
 
-// Medium button with dropdown arrow
-static QToolButton* makeMedDropBtn(const QIcon& icon, const QString& label,
-                                    const QString& tip, int w=100, int h=30)
-{
-    auto* btn = makeMedBtn(icon, label, tip, w, h);
-    btn->setPopupMode(QToolButton::MenuButtonPopup);
-    return btn;
-}
-
-// Small icon-only button
+// Small square button
 static QToolButton* makeSmallBtn(const QIcon& icon, const QString& tip,
-                                  bool checkable=false)
-{
+                                  bool checkable=false, int sz=28) {
     auto* btn = new QToolButton;
-    btn->setIcon(icon);
-    btn->setIconSize(QSize(18,18));
-    btn->setToolTip(tip);
-    btn->setFixedSize(28,28);
+    btn->setIcon(icon); btn->setIconSize(QSize(sz-8, sz-8));
+    btn->setToolTip(tip); btn->setAutoRaise(true);
     btn->setCheckable(checkable);
-    btn->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    btn->setAutoRaise(true);
+    btn->setFixedSize(sz, sz);
+    btn->setStyleSheet(
+        "QToolButton { border:1px solid transparent; border-radius:3px; background:transparent; }"
+        "QToolButton:hover { background:#e8f5ee; border-color:#b8d9c4; }"
+        "QToolButton:pressed, QToolButton:checked { background:#c8e6d4; border-color:#1e7145; }"
+    );
     return btn;
 }
 
-// Vertical separator
-static QFrame* vSep(int h=58) {
-    auto* f = new QFrame;
-    f->setFrameShape(QFrame::VLine);
-    f->setFixedWidth(1); f->setFixedHeight(h);
-    f->setStyleSheet("color: #d4d4d4;");
-    return f;
-}
-
-// Group label at the bottom
-static QLabel* groupLabel(const QString& text) {
-    auto* l = new QLabel(text);
-    l->setAlignment(Qt::AlignCenter);
-    l->setStyleSheet("font-size: 10px; color: #888; padding: 0;");
-    l->setFixedHeight(14);
-    return l;
+// Medium two-line drop button (like "Conditional\nFormatting")
+static QToolButton* makeMedDropBtn(const QIcon& icon, const QString& label,
+                                    const QString& tip, int w=100, int h=56) {
+    auto* btn = new QToolButton;
+    btn->setIcon(icon); btn->setIconSize(QSize(22,22));
+    btn->setText(label); btn->setToolTip(tip);
+    btn->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    btn->setPopupMode(QToolButton::MenuButtonPopup);
+    btn->setAutoRaise(true);
+    btn->setFixedSize(w, h);
+    btn->setStyleSheet(
+        "QToolButton { border:1px solid transparent; border-radius:3px; "
+        "  background:transparent; font-size:10px; color:#333; padding:1px; }"
+        "QToolButton:hover { background:#e8f5ee; border-color:#b8d9c4; }"
+        "QToolButton:pressed { background:#c8e6d4; border-color:#1e7145; }"
+        "QToolButton::menu-button { width:14px; border:none; }"
+    );
+    return btn;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  RibbonWidget::Impl
+//  Impl struct
 // ═══════════════════════════════════════════════════════════════════════════════
 struct RibbonWidget::Impl {
-    // Font group
-    QFontComboBox* fontFamily  { nullptr };
-    QSpinBox*      fontSize    { nullptr };
-    QToolButton*   btnBold     { nullptr };
-    QToolButton*   btnItalic   { nullptr };
-    QToolButton*   btnUnderline{ nullptr };
-    ColorButton*   btnTextColor{ nullptr };
-    ColorButton*   btnFillColor{ nullptr };
-    QToolButton*   btnBorders  { nullptr };
-    // Alignment group
-    QToolButton*   btnAlignL   { nullptr };
-    QToolButton*   btnAlignC   { nullptr };
-    QToolButton*   btnAlignR   { nullptr };
-    QToolButton*   btnVTop     { nullptr };
-    QToolButton*   btnVMid     { nullptr };
-    QToolButton*   btnVBot     { nullptr };
-    QToolButton*   btnWrap     { nullptr };
-    QToolButton*   btnMerge    { nullptr };
-    // Number group
-    QComboBox*     numFormat   { nullptr };
-    QToolButton*   btnDecInc   { nullptr };
-    QToolButton*   btnDecDec   { nullptr };
+    QFontComboBox* fontFamily  {nullptr};
+    QSpinBox*      fontSize    {nullptr};
+    QToolButton*   btnBold     {nullptr};
+    QToolButton*   btnItalic   {nullptr};
+    QToolButton*   btnUnderline{nullptr};
+    QToolButton*   btnBorders  {nullptr};
+    ColorButton*   btnTextColor{nullptr};
+    ColorButton*   btnFillColor{nullptr};
+    QToolButton*   btnAlignL   {nullptr};
+    QToolButton*   btnAlignC   {nullptr};
+    QToolButton*   btnAlignR   {nullptr};
+    QToolButton*   btnVTop     {nullptr};
+    QToolButton*   btnVMid     {nullptr};
+    QToolButton*   btnVBot     {nullptr};
+    QToolButton*   btnWrap     {nullptr};
+    QToolButton*   btnMerge    {nullptr};
+    QComboBox*     numFormat   {nullptr};
+    QToolButton*   btnDecInc   {nullptr};
+    QToolButton*   btnDecDec   {nullptr};
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -403,92 +361,41 @@ struct RibbonWidget::Impl {
 RibbonWidget::RibbonWidget(QWidget* parent)
     : QWidget(parent), d(new Impl)
 {
-    setFixedHeight(130);
-
-    // ── Master stylesheet ────────────────────────────────────────────────────
+    setFixedHeight(132);
     setStyleSheet(R"(
         QWidget { background: #ffffff; font-family: "Segoe UI", Arial, sans-serif; }
 
-        /* Tab bar */
         QTabWidget::pane { border: none; background: #ffffff; margin-top: -1px; }
         QTabBar::tab {
-            padding: 5px 18px 4px;
+            padding: 5px 16px 4px;
             font-size: 12px;
             font-weight: 500;
             color: #555;
             background: transparent;
             border: none;
             border-bottom: 3px solid transparent;
-            min-width: 50px;
+            min-width: 46px;
         }
         QTabBar::tab:selected { color: #1a6b35; border-bottom: 3px solid #1e7145; font-weight: 600; }
         QTabBar::tab:hover:!selected { color: #1a6b35; background: #f0f9f4; }
 
-        /* All tool buttons */
-        QToolButton {
-            border: 1px solid transparent;
-            border-radius: 3px;
-            background: transparent;
-            color: #333;
-        }
-        QToolButton:hover  { background: #e8f5ee; border-color: #b8d9c4; }
-        QToolButton:pressed, QToolButton:checked { background: #c8e6d4; border-color: #1e7145; }
-
-        /* Large buttons (Paste, Format Painter) */
-        QToolButton[large="true"] {
-            font-size: 11px; padding: 2px;
-        }
-        QToolButton[large="true"]:hover { background: #e8f5ee; }
-
-        /* Medium text buttons */
-        QToolButton[medium="true"] {
-            font-size: 11px; text-align: left; padding: 2px 4px;
-        }
-
-        /* Group box labels at bottom */
-        QGroupBox {
-            border: none;
-            font-size: 10px;
-            color: #888;
-            margin-top: 0px;
-            padding: 0px;
-        }
-        QGroupBox::title {
-            subcontrol-origin: padding;
-            subcontrol-position: bottom center;
-            padding: 0 4px;
-        }
-
-        /* Dropdowns */
         QComboBox {
-            border: 1px solid #d0d0d0;
-            border-radius: 3px;
-            background: white;
-            padding: 2px 6px;
-            font-size: 12px;
-            min-width: 40px;
-            selection-background-color: #c8e6d4;
+            border: 1px solid #d0d0d0; border-radius: 3px;
+            background: white; padding: 2px 6px;
+            font-size: 11px; min-width: 40px;
         }
         QComboBox:hover { border-color: #1e7145; }
         QComboBox::drop-down { border: none; width: 18px; }
         QFontComboBox {
-            border: 1px solid #d0d0d0;
-            border-radius: 3px;
-            background: white;
-            font-size: 12px;
-            min-width: 130px;
+            border: 1px solid #d0d0d0; border-radius: 3px;
+            background: white; font-size: 11px; min-width: 128px;
         }
         QFontComboBox:hover { border-color: #1e7145; }
         QSpinBox {
-            border: 1px solid #d0d0d0;
-            border-radius: 3px;
-            background: white;
-            font-size: 12px;
-            min-width: 48px;
+            border: 1px solid #d0d0d0; border-radius: 3px;
+            background: white; font-size: 11px; min-width: 44px;
         }
         QSpinBox:hover { border-color: #1e7145; }
-
-        /* Thin rule under ribbon */
         QFrame[ribbon_sep="true"] { background: #e0e0e0; }
     )");
 
@@ -496,7 +403,6 @@ RibbonWidget::RibbonWidget(QWidget* parent)
     mainLayout->setContentsMargins(0,0,0,0);
     mainLayout->setSpacing(0);
 
-    // ── Tab widget ────────────────────────────────────────────────────────────
     auto* tabs = new QTabWidget;
     tabs->setTabPosition(QTabWidget::North);
     tabs->setDocumentMode(true);
@@ -511,7 +417,7 @@ RibbonWidget::RibbonWidget(QWidget* parent)
     homeRow->setContentsMargins(6,2,6,0);
     homeRow->setSpacing(0);
 
-    auto addSep = [&]{ homeRow->addWidget(vSep()); };
+    auto addSep   = [&]{ homeRow->addWidget(vSep()); };
     auto addSpace = [&](int px=4){ homeRow->addSpacing(px); };
 
     // ── CLIPBOARD ─────────────────────────────────────────────────────────
@@ -520,26 +426,17 @@ RibbonWidget::RibbonWidget(QWidget* parent)
         auto* col = new QVBoxLayout(grp);
         col->setContentsMargins(2,0,2,0); col->setSpacing(0);
 
-        auto* row = new QHBoxLayout;
-        row->setSpacing(2);
+        auto* row = new QHBoxLayout; row->setSpacing(2);
 
-        auto* btnPaste = makeLargeBtn(Ic::paste(), "Paste", "Paste (Ctrl+V)", 56, 62);
-        btnPaste->setProperty("large", true);
-
-        auto* vstack = new QVBoxLayout; vstack->setSpacing(1);
-        auto* btnCut  = makeSmallBtn(Ic::cut(),      "Cut (Ctrl+X)");
-        auto* btnCopy = makeSmallBtn(Ic::copy(),     "Copy (Ctrl+C)");
-        auto* btnFmt  = makeSmallBtn(Ic::fmtpaint(), "Format Painter");
-        vstack->addWidget(btnCut); vstack->addWidget(btnCopy); vstack->addWidget(btnFmt);
-
-        row->addWidget(btnPaste);
-        row->addSpacing(2);
-        row->addLayout(vstack);
-
-        col->addLayout(row);
-        col->addWidget(groupLabel("Clipboard"));
-        homeRow->addWidget(grp);
-        addSep(); addSpace();
+        auto* btnPaste = makeLargeBtn(Ic::paste(),"Paste","Paste (Ctrl+V)",56,64);
+        auto* vs = new QVBoxLayout; vs->setSpacing(1);
+        auto* btnCut  = makeSmallBtn(Ic::cut(),     "Cut (Ctrl+X)");
+        auto* btnCopy = makeSmallBtn(Ic::copy(),    "Copy (Ctrl+C)");
+        auto* btnFmt  = makeSmallBtn(Ic::fmtpaint(),"Format Painter");
+        vs->addWidget(btnCut); vs->addWidget(btnCopy); vs->addWidget(btnFmt);
+        row->addWidget(btnPaste); row->addSpacing(2); row->addLayout(vs);
+        col->addLayout(row); col->addWidget(groupLabel("Clipboard"));
+        homeRow->addWidget(grp); addSep(); addSpace();
 
         connect(btnPaste,&QToolButton::clicked,this,&RibbonWidget::pasteRequested);
         connect(btnCut,  &QToolButton::clicked,this,&RibbonWidget::cutRequested);
@@ -553,51 +450,36 @@ RibbonWidget::RibbonWidget(QWidget* parent)
         auto* col = new QVBoxLayout(grp);
         col->setContentsMargins(2,0,2,0); col->setSpacing(2);
 
-        // Row 1: font family + size + grow/shrink
-        auto* r1 = new QHBoxLayout; r1->setSpacing(3);
+        auto* r1 = new QHBoxLayout; r1->setSpacing(2);
         d->fontFamily = new QFontComboBox;
         d->fontFamily->setCurrentFont(QFont("Calibri"));
-        d->fontFamily->setFixedHeight(24); d->fontFamily->setMaximumWidth(150);
+        d->fontFamily->setFixedHeight(24); d->fontFamily->setMaximumWidth(142);
         d->fontSize = new QSpinBox;
-        d->fontSize->setRange(6,96); d->fontSize->setValue(11); d->fontSize->setFixedHeight(24);
-        d->fontSize->setFixedWidth(52);
+        d->fontSize->setRange(6,96); d->fontSize->setValue(11);
+        d->fontSize->setFixedHeight(24); d->fontSize->setFixedWidth(50);
+        auto* btnGrow   = makeSmallBtn(makeIcon([](QPainter&p,int s){
+            QFont f("Segoe UI",int(s*0.6),QFont::Bold); p.setFont(f); p.setPen(QColor("#333"));
+            p.drawText(QRect(0,0,s-4,s),Qt::AlignCenter,"A");
+            p.setPen(greenPen(1.5)); p.drawText(QRect(s/2,s/2-3,s/2+2,s/2+2),Qt::AlignCenter,"+");
+        }),"Increase Font Size");
+        auto* btnShrink = makeSmallBtn(makeIcon([](QPainter&p,int s){
+            QFont f("Segoe UI",int(s*0.5),QFont::Bold); p.setFont(f); p.setPen(QColor("#333"));
+            p.drawText(QRect(0,0,s-4,s),Qt::AlignCenter,"A");
+            p.setPen(redPen(1.5)); p.drawText(QRect(s/2,s/2-3,s/2+2,s/2+2),Qt::AlignCenter,"-");
+        }),"Decrease Font Size");
+        r1->addWidget(d->fontFamily,1); r1->addWidget(d->fontSize);
+        r1->addWidget(btnGrow); r1->addWidget(btnShrink);
 
-        auto* btnGrow   = makeSmallBtn(makeIcon([](QPainter& p,int s){
-            QFont f("Arial",11,QFont::Bold); p.setFont(f); p.setPen(QColor("#444"));
-            p.drawText(QRect(0,-1,s,s),Qt::AlignCenter,"A");
-            p.setFont(QFont("Arial",7)); p.setPen(greenPen(1.2));
-            p.drawText(QRect(s/2,s/2-2,s/2+2,s/2+2),Qt::AlignCenter,"+");
-        }), "Increase Font Size");
-        auto* btnShrink = makeSmallBtn(makeIcon([](QPainter& p,int s){
-            QFont f("Arial",9); p.setFont(f); p.setPen(QColor("#444"));
-            p.drawText(QRect(0,-1,s,s),Qt::AlignCenter,"A");
-            p.setFont(QFont("Arial",7)); p.setPen(QPen(QColor("#c0392b"),1.2));
-            p.drawText(QRect(s/2,s/2-2,s/2+2,s/2+2),Qt::AlignCenter,"-");
-        }), "Decrease Font Size");
-
-        r1->addWidget(d->fontFamily,1);
-        r1->addWidget(d->fontSize);
-        r1->addWidget(btnGrow);
-        r1->addWidget(btnShrink);
-
-        // Row 2: B I U | borders | A fill | color strip buttons
         auto* r2 = new QHBoxLayout; r2->setSpacing(1);
         d->btnBold      = makeSmallBtn(Ic::bold(),      "Bold (Ctrl+B)",      true);
         d->btnItalic    = makeSmallBtn(Ic::italic(),    "Italic (Ctrl+I)",    true);
         d->btnUnderline = makeSmallBtn(Ic::underline(), "Underline (Ctrl+U)", true);
         d->btnBorders   = makeSmallBtn(Ic::borders(),   "Borders");
-
-        // Font color button with color strip
         d->btnTextColor = new ColorButton("", grp);
-        d->btnTextColor->setToolTip("Font Color");
-        d->btnTextColor->setFixedSize(28,28);
-
-        // Fill color button
+        d->btnTextColor->setToolTip("Font Color");     d->btnTextColor->setFixedSize(28,28);
         d->btnFillColor = new ColorButton("", grp);
         d->btnFillColor->setColor(Qt::yellow);
-        d->btnFillColor->setToolTip("Highlight/Fill Color");
-        d->btnFillColor->setFixedSize(28,28);
-
+        d->btnFillColor->setToolTip("Highlight Color"); d->btnFillColor->setFixedSize(28,28);
         r2->addWidget(d->btnBold); r2->addWidget(d->btnItalic);
         r2->addWidget(d->btnUnderline); r2->addSpacing(3);
         r2->addWidget(d->btnBorders); r2->addSpacing(3);
@@ -606,11 +488,10 @@ RibbonWidget::RibbonWidget(QWidget* parent)
 
         col->addLayout(r1); col->addLayout(r2);
         col->addWidget(groupLabel("Font"));
-        homeRow->addWidget(grp);
-        addSep(); addSpace();
+        homeRow->addWidget(grp); addSep(); addSpace();
 
         connect(d->fontFamily,&QFontComboBox::currentFontChanged,this,
-                [this](const QFont& f){ emit fontFamilyChanged(f.family()); });
+                [this](const QFont&f){ emit fontFamilyChanged(f.family()); });
         connect(d->fontSize,qOverload<int>(&QSpinBox::valueChanged),this,&RibbonWidget::fontSizeChanged);
         connect(d->btnBold,      &QToolButton::toggled,this,&RibbonWidget::boldToggled);
         connect(d->btnItalic,    &QToolButton::toggled,this,&RibbonWidget::italicToggled);
@@ -625,43 +506,53 @@ RibbonWidget::RibbonWidget(QWidget* parent)
         auto* col = new QVBoxLayout(grp);
         col->setContentsMargins(2,0,2,0); col->setSpacing(2);
 
-        // Row 1: vertical align | orientation | wrap | merge
         auto* r1 = new QHBoxLayout; r1->setSpacing(1);
-        d->btnVTop  = makeSmallBtn(Ic::vTop(),       "Align Top",    true);
-        d->btnVMid  = makeSmallBtn(Ic::vMid(),       "Align Middle", true);
-        d->btnVBot  = makeSmallBtn(Ic::vBot(),       "Align Bottom", true);
+        d->btnVTop = makeSmallBtn(Ic::vTop(),"Align Top",   true);
+        d->btnVMid = makeSmallBtn(Ic::vMid(),"Align Middle",true);
+        d->btnVBot = makeSmallBtn(Ic::vBot(),"Align Bottom",true);
+        // Orientation dropdown
         auto* btnOri = makeSmallBtn(Ic::orientation(),"Orientation");
-        d->btnWrap  = makeSmallBtn(Ic::wrap(),       "Wrap Text",    true);
-        d->btnMerge = makeSmallBtn(Ic::merge(),      "Merge and Center");
-        r1->addWidget(d->btnVTop); r1->addWidget(d->btnVMid); r1->addWidget(d->btnVBot);
-        r1->addSpacing(3);
-        r1->addWidget(btnOri); r1->addWidget(d->btnWrap); r1->addWidget(d->btnMerge);
-        r1->addStretch();
+        auto* oriMenu = new QMenu(btnOri);
+        oriMenu->addAction("Angle Counterclockwise");
+        oriMenu->addAction("Angle Clockwise");
+        oriMenu->addAction("Vertical Text");
+        oriMenu->addAction("Rotate Text Up");
+        oriMenu->addAction("Rotate Text Down");
+        btnOri->setMenu(oriMenu); btnOri->setPopupMode(QToolButton::InstantPopup);
+        d->btnWrap  = makeSmallBtn(Ic::wrap(),"Wrap Text",true);
+        // Merge dropdown
+        d->btnMerge = makeSmallBtn(Ic::merge(),"Merge and Center");
+        auto* mergeMenu = new QMenu(d->btnMerge);
+        mergeMenu->addAction("Merge and Center");
+        mergeMenu->addAction("Merge Across");
+        mergeMenu->addAction("Merge Cells");
+        mergeMenu->addAction("Unmerge Cells");
+        d->btnMerge->setMenu(mergeMenu); d->btnMerge->setPopupMode(QToolButton::MenuButtonPopup);
 
-        // Row 2: horizontal align | indent
+        r1->addWidget(d->btnVTop); r1->addWidget(d->btnVMid); r1->addWidget(d->btnVBot);
+        r1->addSpacing(2); r1->addWidget(btnOri); r1->addWidget(d->btnWrap);
+        r1->addSpacing(2); r1->addWidget(d->btnMerge); r1->addStretch();
+
         auto* r2 = new QHBoxLayout; r2->setSpacing(1);
-        d->btnAlignL = makeSmallBtn(Ic::alignL(), "Align Left",   true);
-        d->btnAlignC = makeSmallBtn(Ic::alignC(), "Center",       true);
-        d->btnAlignR = makeSmallBtn(Ic::alignR(), "Align Right",  true);
-        auto* btnIndL = makeSmallBtn(makeIcon([](QPainter& p,int){
-            p.setPen(darkPen(1.5));
+        d->btnAlignL = makeSmallBtn(Ic::alignL(),"Align Left",  true);
+        d->btnAlignC = makeSmallBtn(Ic::alignC(),"Center",      true);
+        d->btnAlignR = makeSmallBtn(Ic::alignR(),"Align Right", true);
+        auto* btnIndL = makeSmallBtn(makeIcon([](QPainter&p,int){
+            p.setPen(darkPen(1.4));
             p.drawLine(2,5,18,5); p.drawLine(6,9,18,9); p.drawLine(2,13,18,13); p.drawLine(6,17,18,17);
             p.setPen(greenPen(2)); QPolygon a; a<<QPoint(2,9)<<QPoint(2,17)<<QPoint(5,13); p.drawPolygon(a);
-        }), "Increase Indent");
-        auto* btnIndR = makeSmallBtn(makeIcon([](QPainter& p,int){
-            p.setPen(darkPen(1.5));
+        }),"Increase Indent");
+        auto* btnIndR = makeSmallBtn(makeIcon([](QPainter&p,int){
+            p.setPen(darkPen(1.4));
             p.drawLine(2,5,18,5); p.drawLine(2,9,14,9); p.drawLine(2,13,18,13); p.drawLine(2,17,14,17);
             p.setPen(greenPen(2)); QPolygon a; a<<QPoint(18,9)<<QPoint(18,17)<<QPoint(15,13); p.drawPolygon(a);
-        }), "Decrease Indent");
+        }),"Decrease Indent");
         r2->addWidget(d->btnAlignL); r2->addWidget(d->btnAlignC); r2->addWidget(d->btnAlignR);
-        r2->addSpacing(3);
-        r2->addWidget(btnIndL); r2->addWidget(btnIndR);
-        r2->addStretch();
+        r2->addSpacing(3); r2->addWidget(btnIndL); r2->addWidget(btnIndR); r2->addStretch();
 
         col->addLayout(r1); col->addLayout(r2);
         col->addWidget(groupLabel("Alignment"));
-        homeRow->addWidget(grp);
-        addSep(); addSpace();
+        homeRow->addWidget(grp); addSep(); addSpace();
 
         connect(d->btnAlignL,&QToolButton::clicked,this,[this]{ emit hAlignChanged(0); });
         connect(d->btnAlignC,&QToolButton::clicked,this,[this]{ emit hAlignChanged(1); });
@@ -673,36 +564,52 @@ RibbonWidget::RibbonWidget(QWidget* parent)
         connect(d->btnMerge, &QToolButton::clicked,this,&RibbonWidget::mergeCellsRequested);
     }
 
-    // ── NUMBER ────────────────────────────────────────────────────────────
+    // ── NUMBER FORMAT ─────────────────────────────────────────────────────
     {
         auto* grp = new QWidget;
         auto* col = new QVBoxLayout(grp);
         col->setContentsMargins(2,0,2,0); col->setSpacing(2);
 
-        // Row 1: format dropdown
+        // Format dropdown
         d->numFormat = new QComboBox;
         d->numFormat->addItems({"General","Number","Currency","Accounting",
                                 "Short Date","Long Date","Time","Percentage",
                                 "Fraction","Scientific","Text"});
-        d->numFormat->setFixedHeight(24); d->numFormat->setFixedWidth(130);
+        d->numFormat->setFixedHeight(24); d->numFormat->setFixedWidth(132);
 
-        // Row 2: $ % 000 | .0+ .0-
+        // Format conversion button (unique to WPS)
+        auto* btnFmtConv = makeSmallBtn(Ic::fmtConvert(),"Format Conversion",false,92);
+        btnFmtConv->setText(" Format Conversion");
+        btnFmtConv->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        btnFmtConv->setFixedSize(140,24);
+        btnFmtConv->setStyleSheet(
+            "QToolButton { border:1px solid #d0d0d0; border-radius:3px; "
+            "  background:white; font-size:10px; color:#333; padding:0 4px; text-align:left; }"
+            "QToolButton:hover { border-color:#1e7145; background:#f0f9f4; }"
+        );
+        auto* fmtMenu = new QMenu(btnFmtConv);
+        fmtMenu->addAction("Convert to Number");
+        fmtMenu->addAction("Convert to Text");
+        fmtMenu->addAction("Convert to Date");
+        fmtMenu->addAction("Remove Leading Zeros");
+        btnFmtConv->setMenu(fmtMenu);
+        btnFmtConv->setPopupMode(QToolButton::InstantPopup);
+
         auto* r2 = new QHBoxLayout; r2->setSpacing(1);
-        auto* btnCurr = makeSmallBtn(Ic::currency(),  "Currency ($)");
-        auto* btnPct  = makeSmallBtn(Ic::percent(),   "Percent Style (%)");
-        auto* btnThou = makeSmallBtn(Ic::thousands(),  "Thousands Separator");
-        d->btnDecInc  = makeSmallBtn(Ic::decInc(),    "Increase Decimal");
-        d->btnDecDec  = makeSmallBtn(Ic::decDec(),    "Decrease Decimal");
+        auto* btnCurr = makeSmallBtn(Ic::currency(),"Currency ($)");
+        auto* btnPct  = makeSmallBtn(Ic::percent(),"Percent Style (%)");
+        auto* btnThou = makeSmallBtn(Ic::thousands(),"Thousands Separator");
+        d->btnDecInc  = makeSmallBtn(Ic::decInc(),"Increase Decimal");
+        d->btnDecDec  = makeSmallBtn(Ic::decDec(),"Decrease Decimal");
         r2->addWidget(btnCurr); r2->addWidget(btnPct); r2->addWidget(btnThou);
-        r2->addSpacing(4);
-        r2->addWidget(d->btnDecInc); r2->addWidget(d->btnDecDec);
+        r2->addSpacing(3); r2->addWidget(d->btnDecInc); r2->addWidget(d->btnDecDec);
         r2->addStretch();
 
         col->addWidget(d->numFormat);
+        col->addWidget(btnFmtConv);
         col->addLayout(r2);
-        col->addWidget(groupLabel("Number"));
-        homeRow->addWidget(grp);
-        addSep(); addSpace();
+        col->addWidget(groupLabel("Number Format"));
+        homeRow->addWidget(grp); addSep(); addSpace();
 
         connect(d->numFormat,qOverload<int>(&QComboBox::currentIndexChanged),this,&RibbonWidget::numberFormatChanged);
         connect(btnCurr,&QToolButton::clicked,this,[this]{ d->numFormat->setCurrentIndex(2); emit numberFormatChanged(2); });
@@ -711,93 +618,163 @@ RibbonWidget::RibbonWidget(QWidget* parent)
         connect(d->btnDecDec,&QToolButton::clicked,this,&RibbonWidget::decreaseDecimalRequested);
     }
 
-    // ── STYLES ────────────────────────────────────────────────────────────
+    // ── STYLES (Conditional Formatting | Cell Styles | Table Styles) ──────
     {
         auto* grp = new QWidget;
         auto* col = new QVBoxLayout(grp);
         col->setContentsMargins(2,0,2,0); col->setSpacing(2);
 
         auto* r1 = new QHBoxLayout; r1->setSpacing(2);
-        auto* btnCond  = makeMedDropBtn(Ic::condFmt(),   "Conditional\nFormatting","Conditional Formatting",110,30);
-        auto* btnTable = makeMedDropBtn(Ic::tableStyle(), "Table\nStyles",          "Table Styles",90,30);
-        r1->addWidget(btnCond); r1->addWidget(btnTable);
+        auto* btnCond  = makeMedDropBtn(Ic::condFmt(),   "Conditional\nFormatting","Conditional Formatting",112,44);
+        auto* condMenu = new QMenu(btnCond);
+        condMenu->addAction("Highlight Cell Rules");
+        condMenu->addAction("Top/Bottom Rules");
+        condMenu->addAction("Data Bars");
+        condMenu->addAction("Color Scales");
+        condMenu->addAction("Icon Sets");
+        condMenu->addSeparator();
+        condMenu->addAction("Manage Rules...");
+        btnCond->setMenu(condMenu);
+
+        r1->addWidget(btnCond);
 
         auto* r2 = new QHBoxLayout; r2->setSpacing(2);
-        auto* btnRowCol = makeMedDropBtn(Ic::rowsAndCols(), "Rows and\nColumns", "Rows and Columns",110,30);
-        auto* btnSheets = makeMedDropBtn(Ic::sheets(),       "Sheets",            "Sheet Operations",90,30);
-        r2->addWidget(btnRowCol); r2->addWidget(btnSheets);
+        auto* btnCellSt = makeMedDropBtn(Ic::cellStyle(), "Cell\nStyles","Cell Styles",90,44);
+        auto* btnTabSt  = makeMedDropBtn(Ic::tableStyle(),"Table\nStyles","Table Styles",90,44);
+        auto* cellMenu = new QMenu(btnCellSt);
+        cellMenu->addAction("Good, Bad, Neutral");
+        cellMenu->addAction("Data and Model");
+        cellMenu->addAction("Titles and Headings");
+        cellMenu->addAction("Themed Cell Styles");
+        cellMenu->addAction("Number Format");
+        btnCellSt->setMenu(cellMenu);
+        auto* tabMenu = new QMenu(btnTabSt);
+        tabMenu->addAction("Light Styles");
+        tabMenu->addAction("Medium Styles");
+        tabMenu->addAction("Dark Styles");
+        btnTabSt->setMenu(tabMenu);
+        r2->addWidget(btnCellSt); r2->addWidget(btnTabSt);
 
         col->addLayout(r1); col->addLayout(r2);
         col->addWidget(groupLabel("Styles"));
-        homeRow->addWidget(grp);
-        addSep(); addSpace();
+        homeRow->addWidget(grp); addSep(); addSpace();
     }
 
-    // ── CELLS ─────────────────────────────────────────────────────────────
+    // ── CELLS (Rows & Columns | Sheets) ───────────────────────────────────
     {
         auto* grp = new QWidget;
         auto* col = new QVBoxLayout(grp);
         col->setContentsMargins(2,0,2,0); col->setSpacing(2);
 
         auto* r1 = new QHBoxLayout; r1->setSpacing(2);
-        auto* btnInsRow = makeSmallBtn(Ic::insRow(), "Insert Row");
-        auto* btnDelRow = makeSmallBtn(Ic::delRow(), "Delete Row");
+        auto* btnInsRow = makeSmallBtn(Ic::insRow(),"Insert Row");
+        auto* btnDelRow = makeSmallBtn(Ic::delRow(),"Delete Row");
         auto* btnFmtCel = makeSmallBtn(Ic::fmtCell(),"Format Cells");
         r1->addWidget(btnInsRow); r1->addWidget(btnDelRow); r1->addWidget(btnFmtCel);
 
         auto* r2 = new QHBoxLayout; r2->setSpacing(2);
-        auto* btnInsCol = makeSmallBtn(makeIcon([](QPainter& p,int){
-            p.setPen(darkPen()); p.drawRoundedRect(2,2,6,16,1,1); p.drawRoundedRect(12,2,6,16,1,1);
-            p.setPen(greenPen(2)); p.drawLine(8,5,8,15); p.drawLine(5,10,11,10);
-        }), "Insert Column");
-        auto* btnDelCol = makeSmallBtn(makeIcon([](QPainter& p,int){
-            p.setPen(darkPen()); p.drawRoundedRect(2,2,6,16,1,1); p.drawRoundedRect(12,2,6,16,1,1);
-            p.setPen(QPen(QColor("#c0392b"),2,Qt::SolidLine,Qt::RoundCap)); p.drawLine(5,10,11,10);
-        }), "Delete Column");
-        r2->addWidget(btnInsCol); r2->addWidget(btnDelCol);
-        r2->addStretch();
+        auto* btnRowCol = makeMedDropBtn(Ic::rowsAndCols(),"Rows and\nColumns","Row/Column Operations",112,40);
+        auto* rowColMenu = new QMenu(btnRowCol);
+        rowColMenu->addAction("Insert Rows");
+        rowColMenu->addAction("Insert Columns");
+        rowColMenu->addSeparator();
+        rowColMenu->addAction("Delete Rows");
+        rowColMenu->addAction("Delete Columns");
+        rowColMenu->addSeparator();
+        rowColMenu->addAction("Hide Rows");
+        rowColMenu->addAction("Unhide Rows");
+        rowColMenu->addAction("Row Height...");
+        rowColMenu->addAction("Column Width...");
+        rowColMenu->addAction("AutoFit Row Height");
+        rowColMenu->addAction("AutoFit Column Width");
+        btnRowCol->setMenu(rowColMenu);
+        r2->addWidget(btnRowCol);
+
+        auto* btnSheets = makeMedDropBtn(Ic::sheets(),"Sheets","Sheet Operations",90,40);
+        auto* sheetMenu = new QMenu(btnSheets);
+        sheetMenu->addAction("Insert Sheet...");
+        sheetMenu->addAction("Delete Sheet");
+        sheetMenu->addAction("Rename Sheet");
+        sheetMenu->addAction("Move/Copy Sheet...");
+        sheetMenu->addSeparator();
+        sheetMenu->addAction("Hide Sheet");
+        sheetMenu->addAction("Unhide Sheet...");
+        sheetMenu->addAction("Protect Sheet...");
+        btnSheets->setMenu(sheetMenu);
+        r2->addWidget(btnSheets);
 
         col->addLayout(r1); col->addLayout(r2);
         col->addWidget(groupLabel("Cells"));
-        homeRow->addWidget(grp);
-        addSep(); addSpace();
+        homeRow->addWidget(grp); addSep(); addSpace();
 
         connect(btnInsRow,&QToolButton::clicked,this,&RibbonWidget::insertRowRequested);
         connect(btnDelRow,&QToolButton::clicked,this,&RibbonWidget::deleteRowRequested);
-        connect(btnInsCol,&QToolButton::clicked,this,&RibbonWidget::insertColumnRequested);
-        connect(btnDelCol,&QToolButton::clicked,this,&RibbonWidget::deleteColumnRequested);
         connect(btnFmtCel,&QToolButton::clicked,this,&RibbonWidget::formatCellsRequested);
     }
 
-    // ── EDITING ───────────────────────────────────────────────────────────
+    // ── EDITING (AutoSum | Fill | Sort | Filter | Freeze | Find) ──────────
     {
         auto* grp = new QWidget;
         auto* col = new QVBoxLayout(grp);
         col->setContentsMargins(2,0,2,0); col->setSpacing(2);
 
         auto* r1 = new QHBoxLayout; r1->setSpacing(2);
-        auto* btnSum    = makeLargeBtn(Ic::autosum(),  "AutoSum",  "AutoSum",  48, 62);
-        auto* btnFill   = makeLargeBtn(Ic::fill(),     "Fill",     "Fill Down/Right", 44, 62);
-        btnSum->setProperty("large",true); btnFill->setProperty("large",true);
 
-        auto* vstack = new QVBoxLayout; vstack->setSpacing(1);
-        auto* btnSortA  = makeSmallBtn(Ic::sortAsc(),  "Sort A to Z");
-        auto* btnSortD  = makeSmallBtn(Ic::sortDesc(), "Sort Z to A");
-        auto* btnFilter = makeSmallBtn(Ic::filter(),   "Filter");
-        auto* btnFind   = makeSmallBtn(Ic::findIcon(), "Find & Replace (Ctrl+H)");
-        auto* btnFreeze = makeSmallBtn(Ic::freezePanes(),"Freeze Panes");
+        // AutoSum large button with dropdown
+        auto* btnSum  = makeLargeBtn(Ic::autosum(),"AutoSum","AutoSum (Alt+=)",48,64);
+        auto* sumMenu = new QMenu(btnSum);
+        sumMenu->addAction("Sum");
+        sumMenu->addAction("Average");
+        sumMenu->addAction("Count Numbers");
+        sumMenu->addAction("Max");
+        sumMenu->addAction("Min");
+        sumMenu->addSeparator();
+        sumMenu->addAction("More Functions...");
+        btnSum->setMenu(sumMenu); btnSum->setPopupMode(QToolButton::MenuButtonPopup);
+
+        // Fill large button with dropdown
+        auto* btnFill = makeLargeBtn(Ic::fill(),"Fill","Fill",40,64);
+        auto* fillMenu = new QMenu(btnFill);
+        fillMenu->addAction("Fill Down  (Ctrl+D)");
+        fillMenu->addAction("Fill Right (Ctrl+R)");
+        fillMenu->addAction("Fill Up");
+        fillMenu->addAction("Fill Left");
+        fillMenu->addSeparator();
+        fillMenu->addAction("Series...");
+        fillMenu->addAction("Flash Fill (Ctrl+E)");
+        btnFill->setMenu(fillMenu); btnFill->setPopupMode(QToolButton::MenuButtonPopup);
+
+        // Sort/Filter/Find/Freeze as vertical stack
+        auto* vs = new QVBoxLayout; vs->setSpacing(1);
 
         auto* vr1 = new QHBoxLayout; vr1->setSpacing(1);
-        vr1->addWidget(btnSortA); vr1->addWidget(btnSortD);
+        auto* btnSortA  = makeSmallBtn(Ic::sortAsc(), "Sort A to Z");
+        auto* btnSortD  = makeSmallBtn(Ic::sortDesc(),"Sort Z to A");
+        // Sort dropdown
+        auto* btnSort   = makeSmallBtn(makeIcon([](QPainter&p,int){
+            p.setPen(darkPen(1.3));
+            p.drawLine(2,5,18,5); p.drawLine(2,9,14,9); p.drawLine(2,13,18,13); p.drawLine(2,17,10,17);
+            p.setPen(greenPen(1.8)); QPolygon a; a<<QPoint(14,14)<<QPoint(14,18)<<QPoint(18,16); p.drawPolygon(a);
+        }), "Custom Sort...");
+        vr1->addWidget(btnSortA); vr1->addWidget(btnSortD); vr1->addWidget(btnSort);
+
         auto* vr2 = new QHBoxLayout; vr2->setSpacing(1);
-        vr2->addWidget(btnFilter); vr2->addWidget(btnFind); vr2->addWidget(btnFreeze);
+        auto* btnFilter = makeSmallBtn(Ic::filter(),    "Filter");
+        auto* btnFreeze = makeSmallBtn(Ic::freezePanes(),"Freeze Panes");
+        // Freeze dropdown
+        auto* freezeMenu = new QMenu(btnFreeze);
+        freezeMenu->addAction("Freeze Panes");
+        freezeMenu->addAction("Freeze Top Row");
+        freezeMenu->addAction("Freeze First Column");
+        freezeMenu->addSeparator();
+        freezeMenu->addAction("Unfreeze Panes");
+        btnFreeze->setMenu(freezeMenu); btnFreeze->setPopupMode(QToolButton::MenuButtonPopup);
+        auto* btnFind   = makeSmallBtn(Ic::findIcon(),  "Find & Replace (Ctrl+H)");
+        vr2->addWidget(btnFilter); vr2->addWidget(btnFreeze); vr2->addWidget(btnFind);
 
-        vstack->addLayout(vr1); vstack->addLayout(vr2);
+        vs->addLayout(vr1); vs->addLayout(vr2);
 
-        r1->addWidget(btnSum);
-        r1->addWidget(btnFill);
-        r1->addSpacing(3);
-        r1->addLayout(vstack);
+        r1->addWidget(btnSum); r1->addWidget(btnFill); r1->addSpacing(3); r1->addLayout(vs);
 
         col->addLayout(r1);
         col->addWidget(groupLabel("Editing"));
@@ -820,10 +797,10 @@ RibbonWidget::RibbonWidget(QWidget* parent)
     tabs->addTab(new QWidget, "Data");
     tabs->addTab(new QWidget, "Review");
     tabs->addTab(new QWidget, "View");
+    tabs->addTab(new QWidget, "Tools");
 
     mainLayout->addWidget(tabs);
 
-    // Bottom border line
     auto* bottomLine = new QFrame;
     bottomLine->setFixedHeight(1);
     bottomLine->setProperty("ribbon_sep", true);
@@ -833,10 +810,9 @@ RibbonWidget::RibbonWidget(QWidget* parent)
 
 RibbonWidget::~RibbonWidget() { delete d; }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 void RibbonWidget::setFormatState(const RibbonFormatState& s) {
     QSignalBlocker b1(d->fontFamily), b2(d->fontSize),
-                   b3(d->btnBold),    b4(d->btnItalic),
+                   b3(d->btnBold), b4(d->btnItalic),
                    b5(d->btnUnderline), b6(d->numFormat);
 
     d->fontFamily->setCurrentFont(QFont(s.fontFamily));

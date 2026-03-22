@@ -84,6 +84,10 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     m_ribbon = createRibbonWidget(this);
     vl->addWidget(m_ribbon);
 
+    // 2b. Notification bar (dismissible promo/info bar like WPS)
+    m_notifBar = buildNotifBar();
+    vl->addWidget(m_notifBar);
+
     // 3. Formula bar
     {
         auto* fb = buildFormulaBar();
@@ -143,6 +147,73 @@ void MainWindow::buildMenuBar() {
     sm->addAction("Insert Sheet", this, &MainWindow::addSheet);
     sm->addAction("Delete Sheet", this, &MainWindow::removeSheet);
     sm->addAction("Rename Sheet", this, [this]{ renameSheet(m_sheetBar->currentIndex()); });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  NOTIFICATION BAR  (WPS-style dismissible info/promo bar)
+// ═══════════════════════════════════════════════════════════════════════════════
+QWidget* MainWindow::buildNotifBar() {
+    auto* bar = new QWidget;
+    bar->setObjectName("notifBar");
+    bar->setFixedHeight(28);
+    bar->setStyleSheet(
+        "QWidget#notifBar {"
+        "  background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+        "    stop:0 #e8f5ee, stop:1 #f0fff5);"
+        "  border-bottom: 1px solid #b8d9c4;"
+        "}"
+    );
+
+    auto* hl = new QHBoxLayout(bar);
+    hl->setContentsMargins(12,3,8,3);
+    hl->setSpacing(8);
+
+    // Star icon
+    auto* star = new QLabel("★");
+    star->setStyleSheet("color:#f0a500; font-size:14px;");
+    hl->addWidget(star);
+
+    // Message
+    auto* msg = new QLabel(
+        "<span style='color:#1a6b35; font-size:11px; font-family:Segoe UI,Arial;'>"
+        "<b>OpenSheet Pro</b> — Unlock advanced features: pivot tables, macros, real-time collaboration</span>"
+    );
+    msg->setTextFormat(Qt::RichText);
+    hl->addWidget(msg, 1);
+
+    // Upgrade button
+    auto* upgradeBtn = new QToolButton;
+    upgradeBtn->setText("Upgrade Now");
+    upgradeBtn->setStyleSheet(
+        "QToolButton {"
+        "  background: #1e7145; color: white; border: none; border-radius: 4px;"
+        "  padding: 3px 14px; font-size: 11px; font-weight: 600;"
+        "  font-family: 'Segoe UI', Arial;"
+        "}"
+        "QToolButton:hover { background: #155835; }"
+        "QToolButton:pressed { background: #0f4228; }"
+    );
+    hl->addWidget(upgradeBtn);
+
+    // Dismiss X button
+    auto* closeBtn = new QToolButton;
+    closeBtn->setText("✕");
+    closeBtn->setFixedSize(20,20);
+    closeBtn->setStyleSheet(
+        "QToolButton { border:none; background:transparent; color:#888; font-size:12px; }"
+        "QToolButton:hover { color:#c0392b; background:#ffe8e8; border-radius:3px; }"
+    );
+    hl->addWidget(closeBtn);
+
+    connect(closeBtn, &QToolButton::clicked, bar, [bar]{ bar->hide(); });
+    connect(upgradeBtn, &QToolButton::clicked, this, [this]{
+        QMessageBox::information(this, "OpenSheet Pro",
+            "Thank you for your interest!\n\nOpenSheet Pro features:\n"
+            "• Pivot Tables & Charts\n• VBA Macros\n• Real-time Collaboration\n"
+            "• 500GB file support\n• Cloud Storage Integration");
+    });
+
+    return bar;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -608,6 +679,73 @@ void MainWindow::onSelectionChanged(const CellFormat& fmt, const QString& ref) {
 
 void MainWindow::onFormatChanged(const CellFormat& fmt, const QString& ref) {
     onSelectionChanged(fmt, ref);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  NOTIFICATION BAR  (WPS-style dismissible info/promo bar)
+// ═══════════════════════════════════════════════════════════════════════════════
+QWidget* MainWindow::buildNotifBar() {
+    auto* bar = new QWidget;
+    bar->setObjectName("notifBar");
+    bar->setFixedHeight(28);
+    bar->setStyleSheet(
+        "QWidget#notifBar {"
+        "  background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+        "    stop:0 #e8f5ee, stop:1 #f0fff5);"
+        "  border-bottom: 1px solid #b8d9c4;"
+        "}"
+    );
+
+    auto* hl = new QHBoxLayout(bar);
+    hl->setContentsMargins(12,3,8,3);
+    hl->setSpacing(8);
+
+    // Star icon
+    auto* star = new QLabel("★");
+    star->setStyleSheet("color:#f0a500; font-size:14px;");
+    hl->addWidget(star);
+
+    // Message
+    auto* msg = new QLabel(
+        "<span style='color:#1a6b35; font-size:11px; font-family:Segoe UI,Arial;'>"
+        "<b>OpenSheet Pro</b> — Unlock advanced features: pivot tables, macros, real-time collaboration</span>"
+    );
+    msg->setTextFormat(Qt::RichText);
+    hl->addWidget(msg, 1);
+
+    // Upgrade button
+    auto* upgradeBtn = new QToolButton;
+    upgradeBtn->setText("Upgrade Now");
+    upgradeBtn->setStyleSheet(
+        "QToolButton {"
+        "  background: #1e7145; color: white; border: none; border-radius: 4px;"
+        "  padding: 3px 14px; font-size: 11px; font-weight: 600;"
+        "  font-family: 'Segoe UI', Arial;"
+        "}"
+        "QToolButton:hover { background: #155835; }"
+        "QToolButton:pressed { background: #0f4228; }"
+    );
+    hl->addWidget(upgradeBtn);
+
+    // Dismiss X button
+    auto* closeBtn = new QToolButton;
+    closeBtn->setText("✕");
+    closeBtn->setFixedSize(20,20);
+    closeBtn->setStyleSheet(
+        "QToolButton { border:none; background:transparent; color:#888; font-size:12px; }"
+        "QToolButton:hover { color:#c0392b; background:#ffe8e8; border-radius:3px; }"
+    );
+    hl->addWidget(closeBtn);
+
+    connect(closeBtn, &QToolButton::clicked, bar, [bar]{ bar->hide(); });
+    connect(upgradeBtn, &QToolButton::clicked, this, [this]{
+        QMessageBox::information(this, "OpenSheet Pro",
+            "Thank you for your interest!\n\nOpenSheet Pro features:\n"
+            "• Pivot Tables & Charts\n• VBA Macros\n• Real-time Collaboration\n"
+            "• 500GB file support\n• Cloud Storage Integration");
+    });
+
+    return bar;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

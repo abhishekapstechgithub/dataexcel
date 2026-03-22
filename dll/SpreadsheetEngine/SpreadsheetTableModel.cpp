@@ -214,4 +214,5 @@ extern "C" ENGINE_API SpreadsheetTableModel*
     return new SpreadsheetTableModel(core, sheet);
 }
 
-#include "SpreadsheetTableModel.moc"
+
+

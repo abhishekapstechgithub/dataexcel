@@ -13,6 +13,7 @@
 #include <QComboBox>
 #include <QToolButton>
 #include <QLabel>
+#include <QPainterPath>
 #include <QFontComboBox>
 #include <QSpinBox>
 #include <QFrame>
@@ -832,4 +833,5 @@ void RibbonWidget::setFormatState(const RibbonFormatState& s) {
 extern "C" RIBBON_API RibbonWidget* createRibbonWidget(QWidget* parent) {
     return new RibbonWidget(parent);
 }
-#include "RibbonWidget.moc"
+
+

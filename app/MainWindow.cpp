@@ -72,10 +72,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     // ── Central widget ─────────────────────────────────────────────────────
     auto* central = new QWidget;
-    central->setStyleSheet("background:#ffffff;");
+    central->setStyleSheet("");  // No background - let grid render its own
     auto* vl = new QVBoxLayout(central);
     vl->setContentsMargins(0,0,0,0);
     vl->setSpacing(0);
+    central->setAutoFillBackground(false);
 
     // 1. Quick Access Toolbar row (inside menu bar)
     buildMenuBar();

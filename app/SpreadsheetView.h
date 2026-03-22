@@ -1,38 +1,27 @@
 #pragma once
 #include <QTableView>
 #include <QHeaderView>
+#include <functional>
 #include "SpreadsheetTableModel.h"
 #include "ISpreadsheetCore.h"
 
-// ── SpreadsheetView ───────────────────────────────────────────────────────────
-// Excel-style QTableView with:
-//  - Zoom support (font scaling)
-//  - Column/row resize with double-click auto-fit
-//  - Freeze panes support
-//  - Excel-style header highlighting (selected col/row turns green)
-//  - Multi-cell selection with copy/paste
-//  - Context menu
 class SpreadsheetView : public QTableView {
     Q_OBJECT
 public:
-    explicit SpreadsheetView(ISpreadsheetCore* core, SheetId sheet,
-                             QWidget* parent = nullptr);
+    explicit SpreadsheetView(ISpreadsheetCore* core, SheetId sheet, QWidget* parent=nullptr);
     ~SpreadsheetView() override;
 
     SpreadsheetTableModel* model() const;
     void switchSheet(SheetId sheet);
-    void setZoomFactor(qreal factor);
 
-    // Current cell info
-    int currentRow() const;
-    int currentCol() const;
+    int   currentRow() const;
+    int   currentCol() const;
     CellFormat currentCellFormat() const;
+    qreal zoomFactor() const;
+    void  setZoomFactor(qreal factor);
 
-    // Apply ribbon actions to current selection
+    // Format apply
     void applyFormat(const CellFormat& fmt);
-    void applyHAlign(int a);
-    void applyVAlign(int a);
-    void applyNumberFormat(int fmt);
     void applyBold(bool on);
     void applyItalic(bool on);
     void applyUnderline(bool on);
@@ -40,8 +29,12 @@ public:
     void applyTextColor(const QColor& c);
     void applyFillColor(const QColor& c);
     void applyFontFamily(const QString& f);
-    void applyFontSize(int size);
+    void applyFontSize(int sz);
+    void applyHAlign(int a);
+    void applyVAlign(int a);
+    void applyNumberFormat(int fmt);
 
+    // Actions
     void insertRow();
     void deleteRow();
     void insertColumn();
@@ -51,17 +44,14 @@ public:
     void autoSum();
     void mergeSelected();
 
-    // Public wrappers for protected QTableView members
-    QModelIndexList publicSelectedIndexes() const { return selectedIndexes(); }
-    QItemSelectionModel* publicSelectionModel() const { return selectionModel(); }
-
 signals:
-    void selectionFormatChanged(const CellFormat& fmt, const QString& cellRef);
+    void selectionFormatChanged(const CellFormat& fmt, const QString& ref);
+    void zoomChanged(int percent);
+    void boldToggled(bool on);
 
 protected:
     void keyPressEvent(QKeyEvent* e) override;
     void contextMenuEvent(QContextMenuEvent* e) override;
-    void mouseDoubleClickEvent(QMouseEvent* e) override;
     void wheelEvent(QWheelEvent* e) override;
 
 private slots:
@@ -70,12 +60,11 @@ private slots:
 private:
     ISpreadsheetCore*      m_core;
     SpreadsheetTableModel* m_model;
-    qreal                  m_zoomFactor { 1.0 };
-    int                    m_baseRowHeight  { 24 };
-    int                    m_baseColWidth   { 80 };
+    int    m_baseColWidth  { 80 };
+    int    m_baseRowHeight { 22 };
+    qreal  m_zoomFactor    { 1.0 };
 
-    void applyToSelection(std::function<void(int,int)> fn);
     void setupHeaders();
-    void refreshSizes();
-    QString selectionToRef() const;
+    void applyToSelection(std::function<void(int,int)> fn);
+    void doSort(Qt::SortOrder order);
 };

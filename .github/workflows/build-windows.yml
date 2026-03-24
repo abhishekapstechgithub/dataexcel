@@ -65,7 +65,7 @@ jobs:
     - name: Build installer with Inno Setup
       shell: cmd
       run: |
-        iscc /O. /Fdeploy\OpenSheet-Setup installer\OpenSheet.iss
+        iscc /O. /FOpenSheet-Setup installer\OpenSheet.iss
 
     # ── Upload artifacts ──────────────────────────────────────────────────────
     - name: Upload installer artifact

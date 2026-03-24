@@ -230,7 +230,7 @@ void TileCache::bulkInsert(const QList<BulkChunk>& chunks)
     for (auto it = groups.begin(); it != groups.end(); ++it) {
         const TileKey& k = it.key();
         Tile* tile = getOrLoadTile(k.sheet, k.tileRow, k.tileCol);
-        for (auto& [lr, lc, cc] : it.value().cells)
+        for (const auto& [lr, lc, cc] : it.value().cells)
             tile->set(lr, lc, cc);
     }
 }

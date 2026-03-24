@@ -1,4 +1,5 @@
 #include "FormatCellsDialog.h"
+// ISpreadsheetCore included via FormatCellsDialog.h
 #include <QFontComboBox>
 #include <QSpinBox>
 #include <QComboBox>
@@ -53,7 +54,7 @@ FormatCellsDialog::FormatCellsDialog(const CellFormat& fmt, QWidget* parent)
     vl->addWidget(buttons);
 }
 
-CellFormat FormatCellsDialog::result() const {
+CellFormat FormatCellsDialog::cellFormat() const {
     CellFormat fmt = m_format;
     fmt.font        = m_font->currentFont();
     fmt.font.setPointSize(m_size->value());

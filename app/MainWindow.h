@@ -3,10 +3,8 @@
 //  MainWindow.h — Main application window (Excel-like layout)
 // ═══════════════════════════════════════════════════════════════════════════════
 #include <QMainWindow>
-#include <QProgressDialog>
-#include <QLabel>
-#include <QSlider>
-#include <QFutureWatcher>
+#include <QString>
+#include <QColor>
 #include <memory>
 
 class ISpreadsheetCore;

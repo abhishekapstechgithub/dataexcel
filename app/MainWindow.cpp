@@ -103,7 +103,7 @@ void MainWindow::setupRibbon()
     }
     if (!m_ribbon) return;
 
-    addToolBar(Qt::TopToolBarArea, nullptr);  // placeholder - ribbon uses layout
+    // ribbon is embedded in the central widget layout — no QToolBar wrapper needed
 
     // ── Connect ribbon signals ─────────────────────────────────────────────────
     connect(m_ribbon, &RibbonWidget::newFileRequested,     this, &MainWindow::onNew);
@@ -133,8 +133,10 @@ void MainWindow::setupRibbon()
     connect(m_ribbon, &RibbonWidget::sortAscRequested,     this, &MainWindow::onSortAsc);
     connect(m_ribbon, &RibbonWidget::sortDescRequested,    this, &MainWindow::onSortDesc);
     connect(m_ribbon, &RibbonWidget::filterRequested,      this, &MainWindow::onFilter);
-    connect(m_ribbon, &RibbonWidget::findReplaceRequested, this, &MainWindow::onFindReplace);
-    connect(m_ribbon, &RibbonWidget::formatCellsRequested, this, &MainWindow::onFormatCells);
+    connect(m_ribbon, &RibbonWidget::findReplaceRequested,  this, &MainWindow::onFindReplace);
+    connect(m_ribbon, &RibbonWidget::formatCellsRequested,  this, &MainWindow::onFormatCells);
+    connect(m_ribbon, &RibbonWidget::insertChartRequested,  this,
+            [this](const QString& type){ onInsertChart(); Q_UNUSED(type) });
 }
 
 void MainWindow::setupFormulaBar()
@@ -380,32 +382,31 @@ void MainWindow::loadFileAsync(const QString& path)
 
     m_view->setCore(m_core);
 
-    // Load in background thread
+    // Load in background thread — captures path/core by value, this by pointer
+    // (safe because QFutureWatcher::finished is delivered on main thread)
     ISpreadsheetCore* core = m_core;
     auto future = QtConcurrent::run([path, core, this]() -> QString {
-        // Try to create a loader
         IFileLoader* loader = createFileLoader();
-        if (!loader) return "Failed to create file loader";
+        if (!loader) return QStringLiteral("Failed to create file loader");
 
-        bool success = true;
-        QString error;
+        // Load metadata (sheet names, dimensions) without cell data
+        loader->loadMetadata(path, core);
 
-        // Load all sheets: first get metadata, then load chunk
-    loader->loadMetadata(path, core);
-    auto sheets = core->sheets();
-    int sheetId = sheets.isEmpty() ? 0 : sheets.first();
+        auto sheets = core->sheets();
+        int sheetId = sheets.isEmpty() ? 0 : sheets.first();
 
-    bool ok = loader->loadChunk(path, core, sheetId, 0, INT_MAX,
+        // Stream-load cells — progress reported via queued signal to main thread
+        bool ok = loader->loadChunk(path, core, sheetId, 0, INT_MAX,
             [this](qint64 done, qint64 total) {
                 if (total > 0) {
-                    int pct = (int)(done * 100 / total);
+                    int pct = (int)((double)done / total * 100.0);
                     QMetaObject::invokeMethod(this, [this, pct]{
                         if (m_progress) m_progress->setValue(pct);
                     }, Qt::QueuedConnection);
                 }
             });
 
-        if (!ok) error = loader->lastError();
+        QString error = ok ? QString() : loader->lastError();
         delete loader;
         return error;
     });

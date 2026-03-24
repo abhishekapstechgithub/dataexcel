@@ -21,6 +21,9 @@
 #include <QFontMetrics>
 #include <QResizeEvent>
 #include <QRegularExpression>
+#include <QFrame>
+#include <QPaintEvent>
+#include <climits>
 #include <cmath>
 #include <algorithm>
 

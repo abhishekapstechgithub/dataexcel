@@ -20,7 +20,6 @@
 #include <QString>
 #include <QColor>
 #include <QFont>
-#include <QModelIndex>
 
 class ISpreadsheetCore;
 class TileCache;
@@ -56,6 +55,10 @@ public:
 
     explicit SpreadsheetView(QWidget* parent = nullptr);
     ~SpreadsheetView() override;
+
+    // ── Column label utilities (public for use by MainWindow etc.) ────────────
+    static QString colLabel(int col);   // 0→"A", 25→"Z", 26→"AA"
+    static int     colIndex(const QString& label); // "A"→0
 
     // ── Data source ──────────────────────────────────────────────────────────
     void setCore(ISpreadsheetCore* core);
@@ -166,9 +169,7 @@ private:
     void drawSelection(QPainter& p);
     void drawGridLines(QPainter& p, const QRect& clip);
 
-    // ── Column label (A, B, ..., XFD) ────────────────────────────────────────
-    static QString colLabel(int col);
-    static int     colIndex(const QString& label);
+    // colLabel and colIndex are declared public above
 
     // ── Scrollbar ─────────────────────────────────────────────────────────────
     void updateScrollBars();

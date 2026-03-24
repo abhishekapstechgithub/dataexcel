@@ -1,13 +1,13 @@
 #pragma once
 #include <QDialog>
-#include "ISpreadsheetCore.h"
+#include <SpreadsheetCore/ISpreadsheetCore.h>
 class QFontComboBox; class QSpinBox; class QComboBox; class QCheckBox;
 
 class FormatCellsDialog : public QDialog {
     Q_OBJECT
 public:
     FormatCellsDialog(const CellFormat& fmt, QWidget* parent = nullptr);
-    CellFormat result() const;
+    CellFormat cellFormat() const;  // returns the edited format
 private:
     QFontComboBox* m_font;
     QSpinBox*      m_size;

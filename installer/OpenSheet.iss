@@ -51,17 +51,17 @@ Name: "fileassoc_csv";   Description: "Associate .csv files with OpenSheet";  Gr
 
 [Files]
 ; Main executable
-Source: "OpenSheet.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\deploy\OpenSheet.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Application DLLs
-Source: "*.dll"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
+Source: "..\deploy\*.dll"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 
 ; Qt platform plugins
-Source: "platforms\*"; DestDir: "{app}\platforms"; Flags: ignoreversion recursesubdirs
-Source: "styles\*";    DestDir: "{app}\styles";    Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
-Source: "sqldrivers\*"; DestDir: "{app}\sqldrivers"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
-Source: "imageformats\*"; DestDir: "{app}\imageformats"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
-Source: "iconengines\*";  DestDir: "{app}\iconengines";  Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "..\deploy\platforms\*";    DestDir: "{app}\platforms";    Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "..\deploy\styles\*";       DestDir: "{app}\styles";       Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "..\deploy\sqldrivers\*";   DestDir: "{app}\sqldrivers";   Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "..\deploy\imageformats\*"; DestDir: "{app}\imageformats"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
+Source: "..\deploy\iconengines\*";  DestDir: "{app}\iconengines";  Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 
 [Icons]
 Name: "{group}\{#AppName}";            Filename: "{app}\{#AppExeName}"

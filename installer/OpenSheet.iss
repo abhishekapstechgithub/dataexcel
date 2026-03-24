@@ -38,9 +38,7 @@ PrivilegesRequired=admin
 UninstallDisplayIcon={app}\{#AppExeName}
 UninstallDisplayName={#AppName} {#AppVersion}
 
-; Modern wizard look
-WizardImageFile=compiler:WizModernImage-IS.bmp
-WizardSmallImageFile=compiler:WizModernSmallImage-IS.bmp
+; Modern wizard look (use Inno Setup defaults)
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

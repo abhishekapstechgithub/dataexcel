@@ -86,6 +86,25 @@ signals:
     // ── Charts / Insert ───────────────────────────────────────────────────────
     void insertChartRequested(const QString& chartType);  // "Bar","Line","Pie","Scatter"
 
+    // ── Page Layout ───────────────────────────────────────────────────────────
+    void printPreviewRequested();
+    void pageSetupRequested();
+    void marginsRequested();
+    void orientationChanged(bool landscape);  // false=Portrait true=Landscape
+
+    // ── Review ───────────────────────────────────────────────────────────────
+    void spellCheckRequested();
+    void newCommentRequested();
+    void protectSheetRequested();
+    void protectWorkbookRequested();
+
+    // ── View ─────────────────────────────────────────────────────────────────
+    void freezePanesRequested(const QString& mode);   // "panes","row","col","unfreeze"
+    void showGridlinesToggled(bool on);
+    void showHeadingsToggled(bool on);
+    void showFormulaBarToggled(bool on);
+    void zoomToValueRequested(int pct);
+
     // ── File ─────────────────────────────────────────────────────────────────
     void newFileRequested();
     void openFileRequested();

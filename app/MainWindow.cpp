@@ -137,6 +137,32 @@ void MainWindow::setupRibbon()
     connect(m_ribbon, &RibbonWidget::formatCellsRequested,  this, &MainWindow::onFormatCells);
     connect(m_ribbon, &RibbonWidget::insertChartRequested,  this,
             [this](const QString& type){ onInsertChart(); Q_UNUSED(type) });
+
+    // ── New signals ───────────────────────────────────────────────────────────
+    connect(m_ribbon, &RibbonWidget::findReplaceRequested, this, &MainWindow::onFindReplace);
+    connect(m_ribbon, &RibbonWidget::printPreviewRequested,this, [this]{ /* TODO: print preview */ });
+    connect(m_ribbon, &RibbonWidget::marginsRequested,     this, [this]{ /* TODO: margins dialog */ });
+    connect(m_ribbon, &RibbonWidget::orientationChanged,   this, [this](bool){ /* TODO: orientation */ });
+    connect(m_ribbon, &RibbonWidget::spellCheckRequested,  this, [this]{ /* TODO: spell check */ });
+    connect(m_ribbon, &RibbonWidget::newCommentRequested,  this, [this]{ /* TODO: new comment */ });
+    connect(m_ribbon, &RibbonWidget::protectSheetRequested,   this, [this]{ /* TODO: protect sheet */ });
+    connect(m_ribbon, &RibbonWidget::protectWorkbookRequested,this, [this]{ /* TODO: protect workbook */ });
+    connect(m_ribbon, &RibbonWidget::showGridlinesToggled, this, [this](bool on){ Q_UNUSED(on); m_view->refresh(); });
+    connect(m_ribbon, &RibbonWidget::showHeadingsToggled,  this, [this](bool){ m_view->refresh(); });
+    connect(m_ribbon, &RibbonWidget::showFormulaBarToggled,this, [this](bool on){
+        if (m_formulaBar) m_formulaBar->setVisible(on);
+    });
+    connect(m_ribbon, &RibbonWidget::zoomToValueRequested, this, [this](int pct){
+        m_view->setZoom(pct);
+        if (m_zoomSlider) m_zoomSlider->setValue(pct);
+        if (m_zoomLabel)  m_zoomLabel->setText(QString("%1%").arg(pct));
+    });
+    connect(m_ribbon, &RibbonWidget::freezePanesRequested, this, [this](const QString& mode){
+        if      (mode == "row")      m_view->setFreezeRow(1);
+        else if (mode == "col")      m_view->setFreezeCol(1);
+        else if (mode == "unfreeze"){ m_view->setFreezeRow(0); m_view->setFreezeCol(0); }
+        else                         m_view->setFreezeRow(m_view->currentRow());
+    });
 }
 
 void MainWindow::setupFormulaBar()

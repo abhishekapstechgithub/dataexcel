@@ -1,25 +1,35 @@
+// Windows resource file for OpenSheet
 #include <windows.h>
-IDI_ICON1 ICON "icon.ico"
 
+// Application icon
+// IDI_ICON1 ICON "opensheet.ico"
+
+// Version information
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     1,0,0,0
 PRODUCTVERSION  1,0,0,0
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0
+FILEOS          VOS__WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
 BEGIN
-  BLOCK "StringFileInfo"
-  BEGIN
-    BLOCK "040904B0"
+    BLOCK "StringFileInfo"
     BEGIN
-      VALUE "CompanyName",      "OpenSheet"
-      VALUE "FileDescription",  "QtSpreadsheet - High Performance Spreadsheet"
-      VALUE "FileVersion",      "1.0.0.0"
-      VALUE "InternalName",     "OpenSheet"
-      VALUE "OriginalFilename", "QtSpreadsheet.exe"
-      VALUE "ProductName",      "OpenSheet"
-      VALUE "ProductVersion",   "1.0.0.0"
+        BLOCK "040904E4"
+        BEGIN
+            VALUE "CompanyName",      "OpenSheet"
+            VALUE "FileDescription",  "OpenSheet Spreadsheet Application"
+            VALUE "FileVersion",      "1.0.0.0"
+            VALUE "InternalName",     "OpenSheet"
+            VALUE "LegalCopyright",   "Copyright (c) 2025 OpenSheet"
+            VALUE "OriginalFilename", "OpenSheet.exe"
+            VALUE "ProductName",      "OpenSheet"
+            VALUE "ProductVersion",   "1.0.0.0"
+        END
     END
-  END
-  BLOCK "VarFileInfo"
-  BEGIN
-    VALUE "Translation", 0x0409, 1200
-  END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1252
+    END
 END

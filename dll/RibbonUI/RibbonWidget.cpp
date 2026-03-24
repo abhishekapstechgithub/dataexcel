@@ -663,14 +663,192 @@ RibbonWidget::RibbonWidget(QWidget* parent)
 
     homeRow->addStretch();
 
+    // ══════════════════ INSERT TAB ═══════════════════════════════════════
+    auto* insertTab = new QWidget;
+    insertTab->setStyleSheet("background:#ffffff;");
+    {
+        auto* row = new QHBoxLayout(insertTab);
+        row->setContentsMargins(8,2,8,0); row->setSpacing(4);
+
+        // Charts group
+        auto* grp = new QWidget; auto* col = new QVBoxLayout(grp);
+        col->setContentsMargins(2,0,2,0); col->setSpacing(2);
+        auto* r1 = new QHBoxLayout; r1->setSpacing(2);
+        auto mkChart=[&](const QString& nm, const QString& sym)->QToolButton*{
+            auto*b=makeLargeBtn(makeIcon([sym](QPainter&p,int s){
+                QFont f("Segoe UI",int(s*0.55),QFont::Bold);
+                p.setFont(f); p.setPen(QColor("#1a7a45"));
+                p.drawText(QRect(0,0,s,s),Qt::AlignCenter,sym);
+            }),nm,"Insert "+nm+" Chart");
+            return b;
+        };
+        auto* btnBar     = mkChart("Bar",     "⬛");
+        auto* btnLine    = mkChart("Line",    "📈");
+        auto* btnPie     = mkChart("Pie",     "◕");
+        auto* btnScatter = mkChart("Scatter", "⁑");
+        r1->addWidget(btnBar); r1->addWidget(btnLine);
+        r1->addWidget(btnPie); r1->addWidget(btnScatter);
+        col->addLayout(r1);
+        col->addWidget(groupLabel("Charts"));
+        row->addWidget(grp); row->addWidget(vSep()); row->addSpacing(4);
+
+        connect(btnBar,     &QToolButton::clicked, this, [this]{ emit insertChartRequested("Bar"); });
+        connect(btnLine,    &QToolButton::clicked, this, [this]{ emit insertChartRequested("Line"); });
+        connect(btnPie,     &QToolButton::clicked, this, [this]{ emit insertChartRequested("Pie"); });
+        connect(btnScatter, &QToolButton::clicked, this, [this]{ emit insertChartRequested("Scatter"); });
+
+        // Tables group
+        auto* grp2 = new QWidget; auto* col2 = new QVBoxLayout(grp2);
+        col2->setContentsMargins(2,0,2,0); col2->setSpacing(2);
+        auto* btnTable = makeLargeBtn(Ic::tableStyle(),"Table","Insert Table (Ctrl+T)");
+        auto* btnPivot = makeLargeBtn(Ic::tableStyle(),"PivotTable","Insert PivotTable");
+        auto* r2 = new QHBoxLayout; r2->addWidget(btnTable); r2->addWidget(btnPivot);
+        col2->addLayout(r2);
+        col2->addWidget(groupLabel("Tables"));
+        row->addWidget(grp2);
+        row->addStretch();
+    }
+
+    // ══════════════════ FORMULAS TAB ═════════════════════════════════════
+    auto* formulasTab = new QWidget;
+    formulasTab->setStyleSheet("background:#ffffff;");
+    {
+        auto* row = new QHBoxLayout(formulasTab);
+        row->setContentsMargins(8,2,8,0); row->setSpacing(4);
+
+        // Function Library
+        auto* grp = new QWidget; auto* col = new QVBoxLayout(grp);
+        col->setContentsMargins(2,0,2,0); col->setSpacing(2);
+
+        auto mkFnBtn=[&](const QString& nm, const QString& tip)->QToolButton*{
+            auto*b=makeMedBtn(Ic::autosum(),nm,tip,110,34);
+            QStringList fns;
+            if(nm=="Math") fns={"SUM","AVERAGE","MIN","MAX","COUNT","ROUND","ABS","SQRT","POWER","MOD","INT","CEILING","FLOOR"};
+            else if(nm=="Logical") fns={"IF","AND","OR","NOT","IFERROR","IFS"};
+            else if(nm=="Lookup") fns={"VLOOKUP","HLOOKUP","INDEX","MATCH","OFFSET","INDIRECT","CHOOSE"};
+            else if(nm=="Text") fns={"CONCATENATE","LEN","LEFT","RIGHT","MID","FIND","REPLACE","UPPER","LOWER","TRIM"};
+            else if(nm=="Date") fns={"TODAY","NOW","DATE","YEAR","MONTH","DAY","DATEDIF","NETWORKDAYS"};
+            else if(nm=="Statistical") fns={"COUNTIF","SUMIF","AVERAGEIF","STDEV","VAR","MEDIAN","PERCENTILE"};
+            if(!fns.isEmpty()) b->setMenu(simpleMenu(b,fns));
+            return b;
+        };
+
+        auto* r1 = new QHBoxLayout; r1->setSpacing(3);
+        r1->addWidget(mkFnBtn("Math","Math Functions"));
+        r1->addWidget(mkFnBtn("Logical","Logical Functions"));
+        r1->addWidget(mkFnBtn("Lookup","Lookup Functions"));
+        auto* r2 = new QHBoxLayout; r2->setSpacing(3);
+        r2->addWidget(mkFnBtn("Text","Text Functions"));
+        r2->addWidget(mkFnBtn("Date","Date/Time Functions"));
+        r2->addWidget(mkFnBtn("Statistical","Statistical Functions"));
+
+        col->addLayout(r1); col->addLayout(r2);
+        col->addWidget(groupLabel("Function Library"));
+        row->addWidget(grp); row->addWidget(vSep()); row->addSpacing(4);
+
+        // Calculation group
+        auto* grp2 = new QWidget; auto* col2 = new QVBoxLayout(grp2);
+        col2->setContentsMargins(2,0,2,0); col2->setSpacing(2);
+        auto* btnCalcNow = makeLargeBtn(Ic::autosum(),"Calculate\nNow","Calculate All (F9)");
+        auto* btnCalcSht = makeLargeBtn(Ic::autosum(),"Calculate\nSheet","Calculate Sheet");
+        auto* r3 = new QHBoxLayout; r3->addWidget(btnCalcNow); r3->addWidget(btnCalcSht);
+        col2->addLayout(r3);
+        col2->addWidget(groupLabel("Calculation"));
+        row->addWidget(grp2);
+        row->addStretch();
+    }
+
+    // ══════════════════ DATA TAB ══════════════════════════════════════════
+    auto* dataTab = new QWidget;
+    dataTab->setStyleSheet("background:#ffffff;");
+    {
+        auto* row = new QHBoxLayout(dataTab);
+        row->setContentsMargins(8,2,8,0); row->setSpacing(4);
+
+        auto* grp = new QWidget; auto* col = new QVBoxLayout(grp);
+        col->setContentsMargins(2,0,2,0); col->setSpacing(2);
+        auto* r1 = new QHBoxLayout; r1->setSpacing(2);
+        auto* btnSortA = makeSmBtn(Ic::sortAsc(), "Sort A→Z");
+        auto* btnSortD = makeSmBtn(Ic::sortDesc(),"Sort Z→A");
+        auto* btnFilt  = makeSmBtn(Ic::filter(),  "Filter");
+        r1->addWidget(btnSortA); r1->addWidget(btnSortD); r1->addWidget(btnFilt);
+        auto* btnSortC = makeMedBtn(Ic::sortAsc(),"Custom Sort...","Custom Sort",120,36);
+        col->addLayout(r1); col->addWidget(btnSortC);
+        col->addWidget(groupLabel("Sort & Filter"));
+        row->addWidget(grp); row->addWidget(vSep()); row->addSpacing(4);
+
+        connect(btnSortA, &QToolButton::clicked, this, &RibbonWidget::sortAscRequested);
+        connect(btnSortD, &QToolButton::clicked, this, &RibbonWidget::sortDescRequested);
+        connect(btnFilt,  &QToolButton::clicked, this, &RibbonWidget::filterRequested);
+
+        // Data Tools group
+        auto* grp2 = new QWidget; auto* col2 = new QVBoxLayout(grp2);
+        col2->setContentsMargins(2,0,2,0); col2->setSpacing(2);
+        auto* btnText    = makeMedBtn(Ic::fmtCell(),"Text to\nColumns","Text to Columns",110,36);
+        auto* btnRemDup  = makeMedBtn(Ic::delRow(), "Remove\nDuplicates","Remove Duplicates",110,36);
+        auto* btnValidat = makeMedBtn(Ic::fmtCell(),"Data\nValidation","Data Validation",110,36);
+        col2->addWidget(btnText); col2->addWidget(btnRemDup); col2->addWidget(btnValidat);
+        col2->addWidget(groupLabel("Data Tools"));
+        row->addWidget(grp2);
+        row->addStretch();
+    }
+
+    // ══════════════════ VIEW TAB ══════════════════════════════════════════
+    auto* viewTab = new QWidget;
+    viewTab->setStyleSheet("background:#ffffff;");
+    {
+        auto* row = new QHBoxLayout(viewTab);
+        row->setContentsMargins(8,2,8,0); row->setSpacing(4);
+
+        auto* grp = new QWidget; auto* col = new QVBoxLayout(grp);
+        col->setContentsMargins(2,0,2,0); col->setSpacing(2);
+        auto* btnFrz = makeSmBtn(Ic::freeze(), "Freeze Panes");
+        btnFrz->setMenu(simpleMenu(btnFrz,{"Freeze Panes","Freeze Top Row","Freeze First Column","---","Unfreeze Panes"}));
+        btnFrz->setPopupMode(QToolButton::MenuButtonPopup);
+        auto* btnZoom = makeMedBtn(Ic::fmtCell(),"Zoom...","Zoom",80,36);
+        auto* btnNorm = makeMedBtn(Ic::fmtCell(),"Normal","Normal View",80,36);
+        col->addWidget(btnFrz); col->addWidget(btnZoom);
+        col->addWidget(groupLabel("Workbook Views"));
+        row->addWidget(grp);
+        row->addStretch();
+    }
+
+    // ══════════════════ PREMIUM TAB ══════════════════════════════════════
+    auto* premiumTab = new QWidget;
+    premiumTab->setStyleSheet("background:qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+                              "stop:0 #1a7a45,stop:1 #0d5c32);");
+    {
+        auto* row = new QHBoxLayout(premiumTab);
+        row->setContentsMargins(16,4,16,4); row->setSpacing(8);
+        auto* lbl = new QLabel("<b style='color:white;font-size:14px'>⭐ OpenSheet Premium</b>"
+                               "<span style='color:#a8e8c0;font-size:11px'> — "
+                               "AI Analysis · Advanced Charts · Cloud Sync · Priority Support</span>");
+        lbl->setTextFormat(Qt::RichText);
+        row->addWidget(lbl);
+        auto* btnUpgrade = new QToolButton;
+        btnUpgrade->setText("Upgrade Now →");
+        btnUpgrade->setFixedSize(130, 32);
+        btnUpgrade->setStyleSheet(
+            "QToolButton{background:#f0c040;color:#1a1d23;border-radius:6px;"
+            "font-weight:700;font-size:13px;border:none;}"
+            "QToolButton:hover{background:#f8d060;}"
+        );
+        row->addWidget(btnUpgrade);
+        row->addStretch();
+    }
+
     tabs->addTab(homeTab,     "Home");
-    tabs->addTab(new QWidget, "Insert");
+    tabs->addTab(insertTab,   "Insert");
     tabs->addTab(new QWidget, "Page Layout");
-    tabs->addTab(new QWidget, "Formulas");
-    tabs->addTab(new QWidget, "Data");
+    tabs->addTab(formulasTab, "Formulas");
+    tabs->addTab(dataTab,     "Data");
     tabs->addTab(new QWidget, "Review");
-    tabs->addTab(new QWidget, "View");
+    tabs->addTab(viewTab,     "View");
     tabs->addTab(new QWidget, "Tools");
+    tabs->addTab(premiumTab,  "Premium");
+
+    // Style the Premium tab specially
+    tabs->tabBar()->setTabTextColor(8, QColor(0x1a7a45));
 
     mainLayout->addWidget(tabs);
 

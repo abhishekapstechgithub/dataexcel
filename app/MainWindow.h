@@ -1,97 +1,134 @@
 #pragma once
+// ═══════════════════════════════════════════════════════════════════════════════
+//  MainWindow.h — Main application window (Excel-like layout)
+// ═══════════════════════════════════════════════════════════════════════════════
 #include <QMainWindow>
-#include <functional>
-#include "ISpreadsheetCore.h"
-#include "IFileLoader.h"
-#include "RibbonWidget.h"
+#include <QProgressDialog>
+#include <QLabel>
+#include <QSlider>
+#include <QFutureWatcher>
+#include <memory>
 
+class ISpreadsheetCore;
+class RibbonWidget;
+class FormulaBar;
 class SpreadsheetView;
-class QTabBar;
+class SheetTabBar;
+class FindReplaceDialog;
+class FormatCellsDialog;
 class QLabel;
-class QLineEdit;
-class QProgressBar;
 class QSlider;
 class QToolButton;
 
-// ── MainWindow ────────────────────────────────────────────────────────────────
-// OpenSheet application shell — architecture mirrors WPS Office:
-//   et.exe (shell) → etcore.dll (core) → griddrawer.dll (grid) →
-//   xlsxrw.dll (io) → ksoui.dll (ribbon)
-class MainWindow : public QMainWindow {
+class MainWindow : public QMainWindow
+{
     Q_OBJECT
 public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override;
 
+    // Open a file (called from main() with command-line arg)
+    void openFile(const QString& path);
+
 protected:
     void closeEvent(QCloseEvent* e) override;
-    void resizeEvent(QResizeEvent* e) override;
+    void dragEnterEvent(QDragEnterEvent* e) override;
+    void dropEvent(QDropEvent* e) override;
 
 private slots:
-    void newFile();
-    void openFile();
-    void saveFile();
-    void saveFileAs();
-    void onFormatChanged(const CellFormat& fmt, const QString& ref);
-    void onSelectionChanged(const CellFormat& fmt, const QString& ref);
-    void onFormulaBarReturn();
+    // ── File ─────────────────────────────────────────────────────────────────
+    void onNew();
+    void onOpen();
+    void onSave();
+    void onSaveAs();
+
+    // ── Edit ──────────────────────────────────────────────────────────────────
+    void onUndo();
+    void onRedo();
+    void onCopy();
+    void onCut();
+    void onPaste();
+    void onDelete();
+
+    // ── Cell navigation ───────────────────────────────────────────────────────
+    void onCellChanged(int row, int col);
+    void onFormulaCommitted(const QString& formula);
+    void onNameBoxNavigate(const QString& address);
+
+    // ── Ribbon signals ────────────────────────────────────────────────────────
+    void onBoldToggled(bool on);
+    void onItalicToggled(bool on);
+    void onUnderlineToggled(bool on);
+    void onFontFamilyChanged(const QString& family);
+    void onFontSizeChanged(int size);
+    void onTextColorChanged(const QColor& c);
+    void onFillColorChanged(const QColor& c);
+    void onHAlignChanged(int a);
+    void onVAlignChanged(int a);
+    void onWrapTextToggled(bool on);
+    void onMergeCells();
+    void onNumberFormatChanged(int fmt);
+    void onInsertRow();
+    void onDeleteRow();
+    void onInsertColumn();
+    void onDeleteColumn();
+    void onAutoSum();
+    void onSortAsc();
+    void onSortDesc();
+    void onFilter();
+    void onFindReplace();
+    void onFormatCells();
+    void onInsertChart();
+
+    // ── Sheet tabs ────────────────────────────────────────────────────────────
+    void onSheetTabActivated(int index);
+    void onAddSheet();
+    void onRenameSheet(int index);
+    void onDeleteSheet(int index);
+
+    // ── Zoom / status ─────────────────────────────────────────────────────────
     void onZoomChanged(int value);
-    void updateSelectionStats();
-    void addSheet();
-    void removeSheet();
-    void renameSheet(int idx);
-    void switchSheet(int idx);
+
+    // ── File loading ──────────────────────────────────────────────────────────
+    void onLoadProgress(int percent);
+    void onLoadFinished(bool success, const QString& error);
 
 private:
-    // Core components
-    ISpreadsheetCore* m_core   { nullptr };
-    IFileLoader*      m_loader { nullptr };
-    SpreadsheetView*  m_view   { nullptr };
-    RibbonWidget*     m_ribbon { nullptr };
-
-    // Formula bar
-    QLineEdit* m_nameBox    { nullptr };
-    QLabel*    m_fxLabel    { nullptr };
-    QLineEdit* m_formulaBar { nullptr };
-
-    // Sheet tab bar
-    QTabBar*     m_sheetBar    { nullptr };
-    QToolButton* m_addSheetBtn { nullptr };
-
-    // Status bar
-    QLabel*       m_statusReady { nullptr };
-    QLabel*       m_statusMode  { nullptr };
-    QLabel*       m_statusStats { nullptr };
-    QProgressBar* m_progress    { nullptr };
-    QWidget*      m_notifBar   { nullptr };
-
-    // Zoom
-    QSlider* m_zoomSlider  { nullptr };
-    QLabel*  m_zoomLabel   { nullptr };
-    int      m_zoomPercent { 100 };
-
-    // State
-    QString m_filePath;
-    bool    m_modified       { false };
-    bool    m_formulaEditing { false };
-
-    // Builders (return widget for layout insertion)
-    void     buildMenuBar();
-    QWidget* buildFormulaBar();
-    QWidget* buildNotifBar();
-    QWidget* buildSheetBar();
-    void     buildStatusBar();
-
-    void connectRibbon();
-    void connectView();
-    void rebuildSheetTabs();
-    void setModified(bool m);
-    bool confirmSave();
-    void loadFileAsync(const QString& path);
+    void setupRibbon();
+    void setupFormulaBar();
+    void setupView();
+    void setupSheetTabs();
+    void setupStatusBar();
+    void setupActions();
+    void syncRibbonToCell(int row, int col);
     void updateTitle();
-    void setZoom(int percent);
-    SheetId currentSheet() const;
+    bool maybeSave();
+    void loadFileAsync(const QString& path);
+    void addNewSheet(const QString& name = {});
+    QString currentFilePath() const { return m_filePath; }
 
-    QToolButton* makeQATButton(const QString& text, const QString& tip,
-                               const std::function<void()>& fn);
+    // ── Widgets ───────────────────────────────────────────────────────────────
+    RibbonWidget*      m_ribbon    { nullptr };
+    FormulaBar*        m_formulaBar { nullptr };
+    SpreadsheetView*   m_view      { nullptr };
+    SheetTabBar*       m_sheetBar  { nullptr };
+    FindReplaceDialog* m_findDlg   { nullptr };
+
+    // Status bar widgets
+    QLabel*      m_statusLabel  { nullptr };
+    QLabel*      m_cellSumLabel { nullptr };
+    QLabel*      m_zoomLabel    { nullptr };
+    QSlider*     m_zoomSlider   { nullptr };
+
+    // ── Data ─────────────────────────────────────────────────────────────────
+    ISpreadsheetCore*  m_core     { nullptr };
+    QString            m_filePath;
+    bool               m_modified { false };
+
+    // ── Async loading ─────────────────────────────────────────────────────────
+    QProgressDialog* m_progress { nullptr };
+
+    // ── Actions ───────────────────────────────────────────────────────────────
+    QAction* m_undoAction { nullptr };
+    QAction* m_redoAction { nullptr };
 };

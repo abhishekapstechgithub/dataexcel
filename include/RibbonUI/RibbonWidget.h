@@ -83,6 +83,9 @@ signals:
     void filterRequested();
     void findReplaceRequested();
 
+    // ── Charts / Insert ───────────────────────────────────────────────────────
+    void insertChartRequested(const QString& chartType);  // "Bar","Line","Pie","Scatter"
+
     // ── File ─────────────────────────────────────────────────────────────────
     void newFileRequested();
     void openFileRequested();

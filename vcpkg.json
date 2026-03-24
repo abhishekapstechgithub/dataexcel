@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "opensheet",
+  "version": "1.0.0",
+  "description": "High-performance spreadsheet application",
+  "dependencies": [
+    {
+      "name": "sqlite3",
+      "features": []
+    },
+    {
+      "name": "zlib",
+      "features": []
+    }
+  ],
+  "builtin-baseline": "2024.09.30"
+}

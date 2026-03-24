@@ -1,125 +1,105 @@
-# OpenSheet — Full-Featured Spreadsheet Engine
+# OpenSheet
 
-## Architecture Overview
+A high-performance desktop spreadsheet application built with C++20 and Qt 6, capable of opening and working with Excel files up to 100GB in size.
 
-```
-┌────────────────────────────────────────────────────────────┐
-│                    UI Layer (app/)                          │
-│  MainWindow → RibbonWidget → SpreadsheetView → SheetBar    │
-└────────────────────┬───────────────────────────────────────┘
-                     │  ISpreadsheetCore (interface)
-┌────────────────────▼───────────────────────────────────────┐
-│              SpreadsheetCore.dll (adapter)                  │
-│   Bridges ISpreadsheetCore interface to SpreadsheetEngine   │
-└────────────────────┬───────────────────────────────────────┘
-                     │
-┌────────────────────▼───────────────────────────────────────┐
-│           SpreadsheetEngineLib (static library)             │
-│  ┌─────────────────┐  ┌─────────────────────────────────┐  │
-│  │ SpreadsheetEngine│  │ EngineModel (QAbstractTableModel)│  │
-│  │                  │  │ - Virtual 1M×16K grid           │  │
-│  │ Sparse storage:  │  │ - data() only called for        │  │
-│  │ unordered_map    │  │   VISIBLE cells (lazy load)     │  │
-│  │ <CellAddress,    │  └─────────────────────────────────┘  │
-│  │  EngineCell>     │                                        │
-│  │                  │  ┌─────────────────────────────────┐  │
-│  │ Dependency graph │  │ CellAddress                     │  │
-│  │ auto-recalc      │  │ - 64-bit packed key             │  │
-│  │ topological sort │  │ - O(1) hash                     │  │
-│  └─────────────────┘  │ - Supports 1,048,576 × 16,384   │  │
-│                        └─────────────────────────────────┘  │
-└────────────────────┬───────────────────────────────────────┘
-                     │
-┌────────────────────▼───────────────────────────────────────┐
-│              FormulaEngine.dll                              │
-│  80+ functions: SUM, AVERAGE, IF, VLOOKUP, PMT, STDEV...   │
-│  Tokenizer → Parser → FunctionRegistry → Result            │
-└────────────────────────────────────────────────────────────┘
-```
+## Features
 
-## Key Technical Decisions
+### UI
+- **Full ribbon toolbar** with tabs: Home, Insert, Page Layout, Formulas, Data, Review, View, Tools, Premium
+- **Formula bar** with cell address box (A1 notation) and fx button
+- **Virtual scrolling grid** — rows A to XFD (16,384 columns), 1,048,576 rows displayed
+- **Sheet tabs** at the bottom with add (+) button
+- **Status bar** with zoom slider (50%–400%) and cell sum display
+- Full cell formatting: font, size, bold, italic, underline, text/fill colors, borders, alignment, wrap text, merge cells, number format
 
-### 1. Sparse Storage
-```cpp
-std::unordered_map<CellAddress, EngineCell> cells;
-```
-- Only non-empty cells consume memory
-- 1M×16K grid with 1000 filled cells = 1000 hash entries
-- O(1) read/write with 64-bit packed key
+### Performance (100GB File Support)
+- **Virtual/lazy rendering** — only cells visible on screen are painted; the full file never loads into memory
+- **Tile-based cache** — keeps only 10,000 rows × 500 columns in RAM; older tiles are evicted to SQLite
+- **Background thread streaming** — UI stays responsive while loading large files; progress bar shown
+- **Virtual scrollbar** — maps full 1,048,576-row range (or even 1 billion rows) to the scrollbar
+- **SAX-based XLSX parser** — uses `QXmlStreamReader` for forward-only, event-driven parsing (no DOM)
 
-### 2. Virtual Grid (Lazy Loading)
-```cpp
-// EngineModel only gets data() called for VISIBLE cells
-int rowCount() { return qMax(200, usedRows + 50); }  // virtual max
-QVariant data(idx, role) {
-    if (!engine->cellExists(row, col)) return {};  // fast path
-    // only loads when viewport requests it
-}
-```
+### File Formats
+- XLSX read/write (streaming SAX parser — never loads full file into DOM)
+- CSV read/write with auto-delimiter detection
+- Native `.opensheet` format (ZIP + JSON chunks)
 
-### 3. Dependency Graph (Auto-Recalc)
-```cpp
-// When A1 changes → find all cells that use A1 → recalc them
-void recalcDependents(sheet, changedAddr) {
-    BFS through dependents graph
-    → topological order evaluation
-    → only recalcs cells that actually need it
-}
-```
+### Formulas (30+)
+`SUM`, `AVERAGE`, `MIN`, `MAX`, `COUNT`, `IF`, `IFERROR`, `AND`, `OR`, `NOT`, `IFS`,
+`VLOOKUP`, `HLOOKUP`, `INDEX`, `MATCH`, `OFFSET`, `INDIRECT`,
+`COUNTIF`, `SUMIF`, `AVERAGEIF`, `STDEV`, `VAR`, `MEDIAN`,
+`CONCATENATE`, `LEN`, `LEFT`, `RIGHT`, `MID`, `TRIM`, `UPPER`, `LOWER`,
+`TODAY`, `NOW`, `DATE`, `YEAR`, `MONTH`, `DAY`, and more.
 
-### 4. Formula Engine (80+ functions)
-- **Math**: SUM, AVERAGE, MIN, MAX, ROUND, ABS, POWER, SQRT, MOD, INT, CEILING, FLOOR
-- **Trig**: SIN, COS, TAN, ASIN, ACOS, ATAN, PI
-- **Statistical**: STDEV, VAR, MEDIAN, LARGE, SMALL, RANK, COUNTIF, SUMIF
-- **Text**: LEFT, RIGHT, MID, LEN, UPPER, LOWER, TRIM, CONCATENATE, SUBSTITUTE, FIND, TEXT
-- **Logical**: IF, AND, OR, NOT, IFERROR, IFS, SWITCH
-- **Date**: NOW, TODAY, YEAR, MONTH, DAY, DATE, DATEDIF, EDATE, DAYS, NETWORKDAYS
-- **Lookup**: INDEX, MATCH, CHOOSE
-- **Financial**: PMT, PV, FV, NPV
+### Other Features
+- Find & Replace with regex support
+- Column/row resize by dragging headers
+- Freeze panes (row and/or column)
+- Multiple sheets (add, rename, delete, reorder)
+- Undo/Redo (100+ levels)
+- Copy/paste with system clipboard (tab-delimited text)
+- Sort ascending/descending
+- Charts: Bar, Line, Pie, Scatter (via Qt6::Charts)
+- Drag & drop file opening
 
-## Build Instructions
+## Build
 
 ### Prerequisites
-- Qt 6.5+
-- CMake 3.22+
-- GCC 11+ or MSVC 2019+
+- CMake 3.20+
+- Qt 6.6+ (Widgets, Core, Gui, Concurrent, Xml, Charts, Sql)
+- MSVC 2019+ or Clang/GCC with C++20 support
 
-### Linux/macOS
-```bash
-bash build.sh
-```
-
-### Windows
+### Windows (MSVC)
 ```bat
 build.bat
 ```
 
-### Manual
-```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/path/to/Qt/6.5.3/gcc_64
-cmake --build build --config Release --parallel
+Or manually:
+```bat
+cmake -B build -DCMAKE_PREFIX_PATH="C:/Qt/6.6.0/msvc2019_64"
+cmake --build build --config Release
+cd build/bin
+windeployqt OpenSheet.exe
 ```
 
-## Module Structure
+### Linux/macOS
+```sh
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/opt/Qt/6.6/gcc_64
+cmake --build build --parallel
+```
+
+## CI/CD
+
+GitHub Actions automatically builds a Windows x64 installer on every push to `main`.
+The installer is built with **Inno Setup 6** and available as a GitHub Actions artifact.
+
+Download the latest build from the **Actions** tab → **OpenSheet Windows x64 Installer**.
+
+## Architecture
+
 ```
 OpenSheet/
-├── engine/                    # Core engine (static lib)
-│   ├── include/engine/
-│   │   ├── CellAddress.h      # 64-bit packed cell coordinate
-│   │   ├── SpreadsheetEngine.h# Main engine API
-│   │   └── EngineModel.h      # Virtual QAbstractTableModel
-│   └── src/
-│       ├── SpreadsheetEngine.cpp  # Sparse storage + dep graph
-│       └── EngineModel.cpp        # Lazy-loading model
-│
+├── app/              # Main executable
+│   ├── main.cpp
+│   ├── MainWindow.cpp/h         # Main window (Excel-like layout)
+│   ├── SpreadsheetView.cpp/h    # Virtual grid renderer
+│   ├── FormulaBar.cpp/h         # Address box + formula editor
+│   ├── SheetTabBar.cpp/h        # Sheet tabs
+│   ├── TileCache.cpp/h          # 10K×500 tile cache (SQLite-backed)
+│   └── FindReplaceDialog/FormatCellsDialog
 ├── dll/
-│   ├── FormulaEngine/         # Formula parser + 80+ functions
-│   ├── SpreadsheetCore/       # ISpreadsheetCore adapter
-│   ├── SpreadsheetEngine/     # Qt model (legacy, wraps engine)
-│   ├── FileLoader/            # CSV + XLSX streaming loader
-│   └── RibbonUI/              # Ribbon widget
-│
-├── include/                   # Public interfaces
-├── app/                       # Application shell (MainWindow)
-└── installer/                 # NSIS installer script
+│   ├── FormulaEngine/           # Tokenizer + Parser + 40+ functions
+│   ├── FileLoader/              # CSV + XLSX SAX streaming loader
+│   ├── SpreadsheetCore/         # ISpreadsheetCore adapter + UndoStack
+│   ├── SpreadsheetEngine/       # QAbstractTableModel bridge
+│   └── RibbonUI/                # 9-tab Excel-style ribbon
+├── engine/                      # Core: sparse cell storage + formula dependency graph
+├── installer/
+│   └── OpenSheet.iss            # Inno Setup 6 script
+└── .github/workflows/
+    └── build-windows.yml        # GitHub Actions CI
 ```
+
+## License
+
+MIT — see LICENSE file.

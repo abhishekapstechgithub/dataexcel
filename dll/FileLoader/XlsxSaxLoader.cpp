@@ -8,6 +8,7 @@
 #include <QXmlStreamReader>
 #include <QRegularExpression>
 #include <QVariant>
+#include <QDate>
 #include <cmath>
 
 // ── CellRef parser ────────────────────────────────────────────────────────────

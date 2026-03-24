@@ -17,6 +17,7 @@ class FormatCellsDialog;
 class QLabel;
 class QSlider;
 class QToolButton;
+class QProgressDialog;
 
 class MainWindow : public QMainWindow
 {

@@ -1,0 +1,8 @@
+# OpenSheet Python Data Engine dependencies
+# Core requirements
+pyspark>=3.4.0
+pyarrow>=12.0.0
+pandas>=2.0.0
+
+# Optional: faster CSV reading
+# polars>=0.18.0

@@ -18,4 +18,8 @@ private:
     static bool   toBool(const QVariant& v);
     static double toNum(const QVariant& v);
     static QList<double> toNums(const QList<QVariant>& args);
+    // Flatten a possibly-nested QVariant (list-of-rows) to a flat value list.
+    static QList<QVariant> flattenToList(const QVariant& v);
+    // Criteria matching: ">5", "<=3", "<>X", "Apple", "*wild*"
+    static bool matchCriteria(const QVariant& val, const QString& criteria);
 };

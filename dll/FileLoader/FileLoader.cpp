@@ -1,6 +1,7 @@
 #include "IFileLoader.h"
 #include "CsvLoader.h"
 #include "XlsxLoader.h"
+#include "OpsLoader.h"
 #include <QFileInfo>
 
 class FileLoaderImpl : public IFileLoader {
@@ -21,6 +22,12 @@ public:
             XlsxLoader xlsx;
             bool ok = xlsx.load(filePath, target, firstRow, count, progress);
             m_error = xlsx.lastError();
+            emit loadFinished(ok);
+            return ok;
+        } else if (ext == "ops") {
+            OpsLoader ops;
+            bool ok = ops.load(filePath, target, progress);
+            m_error = ops.lastError();
             emit loadFinished(ok);
             return ok;
         }
@@ -59,14 +66,20 @@ public:
             m_error = xlsx.lastError();
             emit saveFinished(ok);
             return ok;
+        } else if (ext == "ops") {
+            OpsLoader ops;
+            bool ok = ops.save(filePath, source, progress);
+            m_error = ops.lastError();
+            emit saveFinished(ok);
+            return ok;
         }
         m_error = "Unsupported format: " + ext;
         emit saveFinished(false);
         return false;
     }
 
-    QStringList supportedReadFormats()  const override { return {"csv","xlsx"}; }
-    QStringList supportedWriteFormats() const override { return {"csv","xlsx"}; }
+    QStringList supportedReadFormats()  const override { return {"csv","xlsx","ops"}; }
+    QStringList supportedWriteFormats() const override { return {"csv","xlsx","ops"}; }
     QString lastError() const override { return m_error; }
 
 private:

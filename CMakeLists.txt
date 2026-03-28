@@ -26,7 +26,7 @@ endforeach()
 
 # ── Qt6 packages ─────────────────────────────────────────────────────────────
 find_package(Qt6 6.5 REQUIRED COMPONENTS
-    Core Gui Widgets Concurrent Xml Charts Sql)
+    Core Gui Widgets Concurrent Xml Charts Sql Network)
 qt_standard_project_setup()
 
 # ── Global compiler flags ─────────────────────────────────────────────────────
@@ -50,4 +50,7 @@ add_subdirectory(dll/SpreadsheetCore)
 add_subdirectory(dll/SpreadsheetEngine)
 add_subdirectory(dll/FileLoader)
 add_subdirectory(dll/RibbonUI)
+add_subdirectory(dll/PluginSystem)
+add_subdirectory(dll/PythonEngine)
+add_subdirectory(plugins/SamplePlugin)
 add_subdirectory(app)

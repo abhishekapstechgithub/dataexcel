@@ -18,6 +18,7 @@ class QLabel;
 class QSlider;
 class QToolButton;
 class QProgressDialog;
+class PluginManager;
 
 class MainWindow : public QMainWindow
 {
@@ -126,6 +127,9 @@ private:
 
     // ── Async loading ─────────────────────────────────────────────────────────
     QProgressDialog* m_progress { nullptr };
+
+    // ── Plugin system ─────────────────────────────────────────────────────────
+    PluginManager*   m_pluginManager { nullptr };
 
     // ── Actions ───────────────────────────────────────────────────────────────
     QAction* m_undoAction { nullptr };

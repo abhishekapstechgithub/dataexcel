@@ -34,6 +34,9 @@ private:
 
     QVariant callFunction(const QString& name, QList<QVariant> args);
     QList<QVariant> expandRange(const QString& range);
+    // Returns a single QVariant wrapping a list-of-rows (each row is a QVariantList).
+    // Used so 2D-aware functions (VLOOKUP, SUMIF, etc.) can see the table structure.
+    QVariant        expandRange2D(const QString& range);
     double   toDouble(const QVariant& v);
     bool     toBool(const QVariant& v);
     QString  toString(const QVariant& v);

@@ -3,7 +3,7 @@ qt_wrap_cpp(IFILELOADER_MOC
     ${CMAKE_SOURCE_DIR}/include/FileLoader/IFileLoader.h
 )
 
-set(SOURCES FileLoader.cpp CsvLoader.cpp XlsxLoader.cpp XlsxSaxLoader.cpp ${IFILELOADER_MOC})
+set(SOURCES FileLoader.cpp CsvLoader.cpp XlsxLoader.cpp XlsxSaxLoader.cpp OpsLoader.cpp ${IFILELOADER_MOC})
 add_library(FileLoader SHARED ${SOURCES})
 target_compile_definitions(FileLoader PRIVATE FILELOADER_EXPORTS)
 target_include_directories(FileLoader PUBLIC

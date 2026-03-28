@@ -23,6 +23,8 @@ target_include_directories(QtSpreadsheet PRIVATE
     ${CMAKE_SOURCE_DIR}/include/FormulaEngine
     ${CMAKE_SOURCE_DIR}/include/FileLoader
     ${CMAKE_SOURCE_DIR}/include/RibbonUI
+    ${CMAKE_SOURCE_DIR}/include/PluginSystem
+    ${CMAKE_SOURCE_DIR}/dll/PluginSystem
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
@@ -38,6 +40,7 @@ target_link_libraries(QtSpreadsheet PRIVATE
     FormulaEngine
     FileLoader
     RibbonUI
+    PluginSystem
 )
 
 # Windows app icon

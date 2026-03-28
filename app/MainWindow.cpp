@@ -10,6 +10,7 @@
 #include <SpreadsheetCore/ISpreadsheetCore.h>
 #include <FileLoader/IFileLoader.h>
 #include <RibbonUI/RibbonWidget.h>
+#include <PluginSystem/IPlugin.h>
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -37,9 +38,10 @@
 #include <QtConcurrent/QtConcurrent>
 
 // ── DLL factory typedefs ──────────────────────────────────────────────────────
-using CreateCoreFunc   = ISpreadsheetCore* (*)();
-using CreateRibbonFunc = RibbonWidget*     (*)(QWidget*);
-using CreateLoaderFunc = IFileLoader*      (*)();
+using CreateCoreFunc          = ISpreadsheetCore* (*)();
+using CreateRibbonFunc        = RibbonWidget*     (*)(QWidget*);
+using CreateLoaderFunc        = IFileLoader*      (*)();
+using CreatePluginManagerFunc = PluginManager*    (*)();
 
 // ════════════════════════════════════════════════════════════════════════════
 MainWindow::MainWindow(QWidget* parent)
@@ -75,6 +77,20 @@ MainWindow::MainWindow(QWidget* parent)
     setupActions();
     updateTitle();
 
+    // ── Load plugins (from plugins/ subdirectory next to executable) ──────────
+    {
+        QLibrary psysLib("PluginSystem");
+        if (psysLib.load()) {
+            auto fn = (CreatePluginManagerFunc)psysLib.resolve("createPluginManager");
+            if (fn) m_pluginManager = fn();
+        }
+        if (m_pluginManager) {
+            m_pluginManager->setCore(m_core);
+            QString pluginDir = QApplication::applicationDirPath() + "/plugins";
+            m_pluginManager->loadPluginsFromDirectory(pluginDir);
+        }
+    }
+
     // ── Restore window geometry ───────────────────────────────────────────────
     QSettings s("OpenSheet", "OpenSheet");
     restoreGeometry(s.value("mainWindowGeometry").toByteArray());
@@ -83,6 +99,11 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow()
 {
+    if (m_pluginManager) {
+        m_pluginManager->unloadAll();
+        delete m_pluginManager;
+        m_pluginManager = nullptr;
+    }
     if (m_core) {
         delete m_core;
         m_core = nullptr;

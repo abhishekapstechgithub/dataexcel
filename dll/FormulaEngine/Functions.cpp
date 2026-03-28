@@ -5,18 +5,68 @@
 #include <QtMath>
 #include <QDateTime>
 #include <QDate>
+#include <QRegularExpression>
 
 double FunctionRegistry::toNum(const QVariant& v) {
     if (v.typeId() == QMetaType::Bool) return v.toBool() ? 1.0 : 0.0;
     return v.toDouble();
 }
 
+// Recursively flatten a QVariant that may be a list-of-rows into doubles.
+static void flattenVariantToNums(const QVariant& v, QList<double>& out) {
+    if (v.typeId() == QMetaType::QVariantList) {
+        for (const auto& item : v.toList())
+            flattenVariantToNums(item, out);
+    } else if (!v.isNull() && v.isValid()) {
+        bool ok;
+        double d = v.toDouble(&ok);
+        if (ok) out << d;
+    }
+}
+
 QList<double> FunctionRegistry::toNums(const QList<QVariant>& args) {
     QList<double> out;
-    for (auto& a : args) {
-        if (!a.isNull() && a.isValid()) out << toNum(a);
+    for (const auto& a : args)
+        flattenVariantToNums(a, out);
+    return out;
+}
+
+// Flatten a QVariant (possibly list-of-rows) to a flat QList<QVariant>.
+QList<QVariant> FunctionRegistry::flattenToList(const QVariant& v) {
+    QList<QVariant> out;
+    if (v.typeId() == QMetaType::QVariantList) {
+        for (const auto& item : v.toList()) {
+            auto sub = flattenToList(item);
+            out.append(sub);
+        }
+    } else {
+        out << v;
     }
     return out;
+}
+
+// Match a single value against an Excel-style criteria string.
+// Supports: "=X", "<>X", ">N", ">=N", "<N", "<=N", "*wild*", plain text.
+bool FunctionRegistry::matchCriteria(const QVariant& val, const QString& criteria) {
+    QString c = criteria.trimmed();
+    auto testNum = [&](auto cmp) -> bool {
+        bool ok1, ok2;
+        double lhs = val.toDouble(&ok1);
+        double rhs = c.mid(c.startsWith("<>") || c.startsWith(">=") || c.startsWith("<=") ? 2 : 1).toDouble(&ok2);
+        return ok1 && ok2 && cmp(lhs, rhs);
+    };
+    if (c.startsWith(">=")) return testNum([](double a, double b){ return a >= b; });
+    if (c.startsWith("<=")) return testNum([](double a, double b){ return a <= b; });
+    if (c.startsWith("<>")) return val.toString().compare(c.mid(2), Qt::CaseInsensitive) != 0;
+    if (c.startsWith(">"))  return testNum([](double a, double b){ return a >  b; });
+    if (c.startsWith("<"))  return testNum([](double a, double b){ return a <  b; });
+    if (c.startsWith("="))  return val.toString().compare(c.mid(1), Qt::CaseInsensitive) == 0;
+    if (c.contains('*') || c.contains('?')) {
+        QRegularExpression re(QRegularExpression::wildcardToRegularExpression(c),
+                              QRegularExpression::CaseInsensitiveOption);
+        return re.match(val.toString()).hasMatch();
+    }
+    return val.toString().compare(c, Qt::CaseInsensitive) == 0;
 }
 
 bool FunctionRegistry::toBool(const QVariant& v) {
@@ -68,14 +118,22 @@ void FunctionRegistry::registerAll() {
     registerFn("COUNT", [this](QList<QVariant> a) -> QVariant {
         return (double)toNums(a).size();
     });
-    registerFn("COUNTA", [](QList<QVariant> a) -> QVariant {
+    registerFn("COUNTA", [this](QList<QVariant> a) -> QVariant {
         int cnt = 0;
-        for (auto& v : a) if (!v.isNull() && v.isValid() && !v.toString().isEmpty()) cnt++;
+        for (const auto& v : a) {
+            auto flat = flattenToList(v);
+            for (const auto& item : flat)
+                if (!item.isNull() && item.isValid() && !item.toString().isEmpty()) cnt++;
+        }
         return (double)cnt;
     });
-    registerFn("COUNTBLANK", [](QList<QVariant> a) -> QVariant {
+    registerFn("COUNTBLANK", [this](QList<QVariant> a) -> QVariant {
         int cnt = 0;
-        for (auto& v : a) if (v.isNull() || !v.isValid() || v.toString().isEmpty()) cnt++;
+        for (const auto& v : a) {
+            auto flat = flattenToList(v);
+            for (const auto& item : flat)
+                if (item.isNull() || !item.isValid() || item.toString().isEmpty()) cnt++;
+        }
         return (double)cnt;
     });
     registerFn("ABS",  [this](QList<QVariant> a) -> QVariant { return std::abs(toNum(a.value(0))); });
@@ -247,14 +305,50 @@ void FunctionRegistry::registerAll() {
 
     // ── Lookup ────────────────────────────────────────────────────────────────
     registerFn("VLOOKUP", [this](QList<QVariant> a) -> QVariant {
-        // VLOOKUP(lookup_val, range_values..., col_index, [exact])
-        // Simplified: args = [lookup, v1, v2, ..., vN, col_index, match_type]
-        // For real impl a range would be passed as a flat list
+        // VLOOKUP(lookup, table_2d, col_index, [exact_match=TRUE])
         if (a.size() < 3) return QString("#N/A");
-        QVariant target = a.value(0);
-        int colIdx = (int)toNum(a.last()) - 1;
-        // rest are rows flattened - simplified to just return #N/A for now
+        QVariant lookup = a.value(0);
+        QList<QVariant> rows = a.value(1).toList(); // list-of-rows from expandRange2D
+        int colIdx = (int)toNum(a.value(2)) - 1;
+        bool exact = a.size() < 4 || toBool(a.value(3));
+        for (const auto& rowVar : rows) {
+            QList<QVariant> row = rowVar.toList();
+            if (row.isEmpty()) continue;
+            bool match = exact
+                ? (row[0].toString().compare(lookup.toString(), Qt::CaseInsensitive) == 0 ||
+                   (row[0].canConvert<double>() && lookup.canConvert<double>() &&
+                    toNum(row[0]) == toNum(lookup)))
+                : (row[0].toString().compare(lookup.toString(), Qt::CaseInsensitive) == 0 ||
+                   (row[0].canConvert<double>() && lookup.canConvert<double>() &&
+                    toNum(row[0]) == toNum(lookup)));
+            if (match) {
+                if (colIdx >= 0 && colIdx < row.size()) return row[colIdx];
+                return QString("#REF!");
+            }
+        }
         return QString("#N/A");
+    });
+    registerFn("HLOOKUP", [this](QList<QVariant> a) -> QVariant {
+        // HLOOKUP(lookup, table_2d, row_index, [exact_match=TRUE])
+        if (a.size() < 3) return QString("#N/A");
+        QVariant lookup = a.value(0);
+        QList<QVariant> rows = a.value(1).toList();
+        int rowIdx = (int)toNum(a.value(2)) - 1;
+        if (rows.isEmpty()) return QString("#N/A");
+        // Search first row (header row) for lookup value
+        QList<QVariant> headerRow = rows[0].toList();
+        int foundCol = -1;
+        for (int c = 0; c < headerRow.size(); ++c) {
+            bool match = headerRow[c].toString().compare(lookup.toString(), Qt::CaseInsensitive) == 0 ||
+                         (headerRow[c].canConvert<double>() && lookup.canConvert<double>() &&
+                          toNum(headerRow[c]) == toNum(lookup));
+            if (match) { foundCol = c; break; }
+        }
+        if (foundCol < 0) return QString("#N/A");
+        if (rowIdx < 0 || rowIdx >= rows.size()) return QString("#REF!");
+        QList<QVariant> targetRow = rows[rowIdx].toList();
+        if (foundCol >= targetRow.size()) return QString("#REF!");
+        return targetRow[foundCol];
     });
 
     // ── Date (basic) ─────────────────────────────────────────────────────────
@@ -323,11 +417,8 @@ void FunctionRegistry::registerExtended() {
     });
 
     // ── Lookup / Reference ───────────────────────────────────────────────────
-    registerFn("VLOOKUP", [this](QList<QVariant> a) -> QVariant {
-        // Simplified VLOOKUP: VLOOKUP(value, range_values..., col_index)
-        // For full implementation the parser would need to pass a 2D array
-        Q_UNUSED(a); return QString("#N/A");
-    });
+    // VLOOKUP/HLOOKUP fully implemented in registerAll(); these are no-ops to avoid double-registration.
+    // (registerAll runs before registerExtended so the correct versions are already registered.)
     registerFn("INDEX", [](QList<QVariant> a) -> QVariant {
         int idx = (int)a.value(1).toDouble() - 1;
         if (idx < 0 || idx >= a.size()-1) return QString("#REF!");
@@ -429,20 +520,98 @@ void FunctionRegistry::registerExtended() {
 
     // ── Math ─────────────────────────────────────────────────────────────────
     registerFn("SUMIF", [this](QList<QVariant> a) -> QVariant {
-        // SUMIF(range, criteria, sum_range) — simplified
-        QString criteria = a.value(1).toString().trimmed();
-        double sum=0;
-        // With only flat args we sum values that match (no range support here)
-        for (int i=0; i<a.size(); i+=2)
-            if (a[i].toString().contains(criteria)) sum+=toNum(a.value(i+1));
+        // SUMIF(range, criteria, [sum_range])
+        if (a.size() < 2) return 0.0;
+        QList<QVariant> rangeVals = flattenToList(a.value(0));
+        QString criteria = a.value(1).toString();
+        QList<QVariant> sumVals = a.size() > 2 ? flattenToList(a.value(2)) : rangeVals;
+        double sum = 0.0;
+        for (int i = 0; i < rangeVals.size(); ++i) {
+            if (matchCriteria(rangeVals[i], criteria) && i < sumVals.size())
+                sum += toNum(sumVals[i]);
+        }
+        return sum;
+    });
+    registerFn("SUMIFS", [this](QList<QVariant> a) -> QVariant {
+        // SUMIFS(sum_range, range1, crit1, range2, crit2, ...)
+        if (a.size() < 3) return 0.0;
+        QList<QVariant> sumVals = flattenToList(a.value(0));
+        double sum = 0.0;
+        for (int i = 0; i < sumVals.size(); ++i) {
+            bool allMatch = true;
+            for (int p = 1; p + 1 < a.size(); p += 2) {
+                QList<QVariant> rangeVals = flattenToList(a.value(p));
+                QString crit = a.value(p + 1).toString();
+                if (i >= rangeVals.size() || !matchCriteria(rangeVals[i], crit)) {
+                    allMatch = false;
+                    break;
+                }
+            }
+            if (allMatch) sum += toNum(sumVals[i]);
+        }
         return sum;
     });
     registerFn("COUNTIF", [this](QList<QVariant> a) -> QVariant {
-        QString criteria = a.value(0).toString();
-        int cnt=0;
-        for (int i=1; i<a.size(); i++)
-            if (a[i].toString().contains(criteria,Qt::CaseInsensitive)) cnt++;
+        // COUNTIF(range, criteria)
+        if (a.size() < 2) return 0.0;
+        QList<QVariant> rangeVals = flattenToList(a.value(0));
+        QString criteria = a.value(1).toString();
+        int cnt = 0;
+        for (const auto& v : rangeVals)
+            if (matchCriteria(v, criteria)) cnt++;
         return (double)cnt;
+    });
+    registerFn("COUNTIFS", [this](QList<QVariant> a) -> QVariant {
+        // COUNTIFS(range1, crit1, range2, crit2, ...)
+        if (a.size() < 2) return 0.0;
+        QList<QVariant> first = flattenToList(a.value(0));
+        int cnt = 0;
+        for (int i = 0; i < first.size(); ++i) {
+            bool allMatch = true;
+            for (int p = 0; p + 1 < a.size(); p += 2) {
+                QList<QVariant> rangeVals = flattenToList(a.value(p));
+                QString crit = a.value(p + 1).toString();
+                if (i >= rangeVals.size() || !matchCriteria(rangeVals[i], crit)) {
+                    allMatch = false;
+                    break;
+                }
+            }
+            if (allMatch) cnt++;
+        }
+        return (double)cnt;
+    });
+    registerFn("AVERAGEIF", [this](QList<QVariant> a) -> QVariant {
+        // AVERAGEIF(range, criteria, [avg_range])
+        if (a.size() < 2) return QString("#DIV/0!");
+        QList<QVariant> rangeVals = flattenToList(a.value(0));
+        QString criteria = a.value(1).toString();
+        QList<QVariant> avgVals = a.size() > 2 ? flattenToList(a.value(2)) : rangeVals;
+        double sum = 0.0; int cnt = 0;
+        for (int i = 0; i < rangeVals.size(); ++i) {
+            if (matchCriteria(rangeVals[i], criteria) && i < avgVals.size()) {
+                sum += toNum(avgVals[i]); cnt++;
+            }
+        }
+        return cnt > 0 ? sum / cnt : QVariant(QString("#DIV/0!"));
+    });
+    registerFn("AVERAGEIFS", [this](QList<QVariant> a) -> QVariant {
+        // AVERAGEIFS(avg_range, range1, crit1, range2, crit2, ...)
+        if (a.size() < 3) return QString("#DIV/0!");
+        QList<QVariant> avgVals = flattenToList(a.value(0));
+        double sum = 0.0; int cnt = 0;
+        for (int i = 0; i < avgVals.size(); ++i) {
+            bool allMatch = true;
+            for (int p = 1; p + 1 < a.size(); p += 2) {
+                QList<QVariant> rangeVals = flattenToList(a.value(p));
+                QString crit = a.value(p + 1).toString();
+                if (i >= rangeVals.size() || !matchCriteria(rangeVals[i], crit)) {
+                    allMatch = false;
+                    break;
+                }
+            }
+            if (allMatch) { sum += toNum(avgVals[i]); cnt++; }
+        }
+        return cnt > 0 ? sum / cnt : QVariant(QString("#DIV/0!"));
     });
     registerFn("MOD",  [this](QList<QVariant> a) -> QVariant {
         double b=toNum(a.value(1)); if(b==0) return QString("#DIV/0!");
